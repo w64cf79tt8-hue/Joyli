@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115175637";
+const JOYLI_BUILD="20261115182135";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1140,7 +1140,7 @@ function animView(t){const v=MV[S.city];if(!v)return;const f={x:v.x,y:v.y,w:v.w,
   const t0=performance.now();const step=n=>{const p=Math.min(1,(n-t0)/280),e=1-Math.pow(1-p,3);["x","y","w","h"].forEach(k=>v[k]=f[k]+(t[k]-f[k])*e);applyView();if(p<1)requestAnimationFrame(step);else{clampView(v);applyView()}};requestAnimationFrame(step)}
 function zoomCenter(f){if(hasL()&&LM){f>1?LM.zoomIn():LM.zoomOut();return}const v=MV[S.city];if(!v)return;const w=limW(v,v.w/f),h=w*v.h/v.w;animView({x:v.x+v.w/2-w/2,y:v.y+v.h/2-h/2,w,h})}
 function centerOn(px,py,w){const v=MV[S.city];if(!v)return;w=limW(v,w??v.w);const h=w*v.h/v.w;animView({x:px-w/2,y:py-h/2,w,h})}
-function centerMe(){if(hasL()&&LM){const p=userPos();LM.setView([p.lat,p.lng],Math.max(LM.getZoom(),14));return}const g=geom(city()),p=userPos(),[ux,uy]=proj(g,p.lat,p.lng),v=MV[S.city];if(v)centerOn(ux,uy,Math.min(v.w,v.base/2.4))}
+function centerMe(){if(hasL()&&LM){locate();return}const g=geom(city()),p=userPos(),[ux,uy]=proj(g,p.lat,p.lng),v=MV[S.city];if(v)centerOn(ux,uy,Math.min(v.w,v.base/2.4))}
 function selectPin(id){
   if(hasL()&&LM){S.sel=id;lmSelect(id);return}
   S.sel=id;const m=mapEls();if(!m)return;
@@ -1205,7 +1205,7 @@ function lmDraw(){
   if(!LM)return;LMlayer.clearLayers();LMm={};
   const p=userPos();
   if(S.F.near)L.circle([p.lat,p.lng],{radius:S.radius*1000,color:"#0E5551",className:"lrad",weight:1.5,fillOpacity:.07,interactive:false}).addTo(LMlayer);
-  L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false,keyboard:false,zIndexOffset:-100}).addTo(LMlayer);
+  if(S.posSrc!=="area")L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false,keyboard:false,zIndexOffset:-100}).addTo(LMlayer);
   (S.mapList||[]).forEach(e=>{if(!isFinite(e.lat)||!isFinite(e.lng))return;
     LMm[e.id]=L.marker([e.lat,e.lng],{icon:pinIcon(e,S.sel===e.id),keyboard:false,zIndexOffset:S.sel===e.id?1000:0}).addTo(LMlayer)});
 }
@@ -1223,9 +1223,9 @@ function lmPick(){
   const p=userPos(),c=city();
   LP=L.map(el,{zoomControl:false,attributionControl:true});tiles().addTo(LP);LP.attributionControl.setPrefix(false);
   LP.setView(S.posSrc==="area"?cityCenter(c):[p.lat,p.lng],S.posSrc==="area"?12:14);
-  const me=L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false}).addTo(LP);
+  const me=L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false,opacity:S.posSrc==="area"?0:1}).addTo(LP);
   const rc=L.circle([p.lat,p.lng],{radius:S.radius*1000,color:"#0E5551",className:"lrad",weight:1.5,fillOpacity:.07,interactive:false}).addTo(LP);LP._rc=rc;
-  LP.on("click",ev=>{S.pos={lat:ev.latlng.lat,lng:ev.latlng.lng,city:S.city};S.posSrc="pin";persist();me.setLatLng(ev.latlng);rc.setLatLng(ev.latlng);
+  LP.on("click",ev=>{S.pos={lat:ev.latlng.lat,lng:ev.latlng.lng,city:S.city};S.posSrc="pin";persist();me.setLatLng(ev.latlng);me.setOpacity(1);rc.setLatLng(ev.latlng);
     const h=el.parentNode.querySelector(".maphint");if(h)h.textContent="Ти си тук: "+nearestArea(userPos());renderTab()});
   setTimeout(()=>LP&&LP.invalidateSize(),350);
 }
@@ -1260,6 +1260,8 @@ function lmForm(getCity,onPick){
   setTimeout(()=>LF&&LF.invalidateSize(),350);
   return LF;
 }
+// при отваряне: ако човекът вече е разрешил локацията, я обновяваме тихо (може да се е преместил)
+addEventListener("load",()=>{try{if(S.posSrc==="gps"&&navigator.permissions)navigator.permissions.query({name:"geolocation"}).then(r=>{if(r.state==="granted")locate(true)}).catch(()=>{})}catch(e){}});
 
 /* ================= РЕНДЕР ================= */
 const TABS={home:renderHome,events:renderEvents,map:renderMap,saved:renderSaved,profile:renderProfile};
@@ -1593,16 +1595,16 @@ document.addEventListener("input",ev=>{
     clearTimeout(rT);rT=setTimeout(()=>{if(!sheetOpen()&&!S.screens.length)renderAll()},400)}
   if(id==="uname"){const v=ev.target.value.trim();if(!v)return;clearTimeout(rT);rT=setTimeout(()=>{const f=S.role==="org"?{full_name:v,org_name:v}:{full_name:v};act(()=>saveProfile(f),{reload:S.role==="org"?["orgs"]:[],ok:"Името е запазено"})},700)}
 });
-function locate(){
-  const fail=m=>{$("#toastRoot").innerHTML="";openLocation(m)};
+function locate(quiet){
+  const fail=m=>{if(quiet)return;$("#toastRoot").innerHTML="";openLocation(m)};
   if(!navigator.geolocation){fail("Това устройство не дава локация. Докосни картата, за да посочиш къде си.");return}
-  toast("Търсим местоположението ти…");
+  if(!quiet)toast("Търсим местоположението ти…");
   try{navigator.geolocation.getCurrentPosition(p=>{
       const lat=p.coords.latitude,lng=p.coords.longitude;let best=CITIES[0],bd=1e9;
       CITIES.forEach(c=>c.areas.forEach(a=>{const d=dist(lat,lng,a[1],a[2]);if(d<bd){bd=d;best=c}}));
       if(bd>40){fail("Намерихме те, но не си близо до град от списъка. Избери град ръчно.");return}
-      S.city=best.id;S.pos={lat,lng,city:best.id};S.posSrc="gps";persist();if(loggedIn()&&LIVE.me.home_city!==best.id)saveProfile({home_city:best.id}).catch(()=>{});closeSheet();renderAll();toast("Намерихме те в "+best.name);
-    },e=>fail(e&&e.code===1?"Не разреши достъп до местоположението. Можеш да го разрешиш от настройките на браузъра или да докоснеш картата, за да посочиш къде си.":"Не успяхме да намерим местоположението ти. Докосни картата, за да посочиш къде си."),{timeout:10000,maximumAge:300000,enableHighAccuracy:false});
+      S.city=best.id;S.pos={lat,lng,city:best.id};S.posSrc="gps";persist();if(loggedIn()&&LIVE.me.home_city!==best.id)saveProfile({home_city:best.id}).catch(()=>{});if(!quiet){closeSheet();toast("Намерихме те в "+best.name)}renderAll();if(LM&&S.tab==="map")LM.setView([lat,lng],Math.max(LM.getZoom(),15));
+    },e=>fail(e&&e.code===1?"Не разреши достъп до местоположението. Можеш да го разрешиш от настройките на браузъра или да докоснеш картата, за да посочиш къде си.":"Не успяхме да намерим местоположението ти. Докосни картата, за да посочиш къде си."),{timeout:15000,maximumAge:30000,enableHighAccuracy:true});
   }catch(_){fail("Локацията не е достъпна тук. Докосни картата, за да посочиш къде си.")}
 }
 
