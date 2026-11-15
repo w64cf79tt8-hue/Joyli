@@ -17,6 +17,7 @@
 <meta property="og:title" content="Joyli – събития за деца и семейство">
 <meta property="og:description" content="Събития около теб във всеки град в България.">
 <meta property="og:image" content="icons/icon-512.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,600;0,700;0,800;1,800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
@@ -528,6 +529,24 @@ body.loading #main{opacity:.55;pointer-events:none;transition:opacity .2s}
 .install-tip{display:flex;gap:12px;align-items:flex-start;background:var(--brand-soft);border-radius:16px;padding:12px 14px;margin:14px 0 4px;font-size:14px}
 .install-tip svg{color:var(--brand);flex:0 0 auto;margin-top:2px}
 .install-tip button{border:0;background:none;color:var(--muted);font-weight:700;padding:0 0 0 6px;margin-left:auto}
+/* истинска карта */
+.lslot{position:absolute;inset:0;z-index:0}
+.lmap{width:100%;height:100%}
+.lmap,.lmini{background:var(--map);font:inherit}
+.lmini{height:240px;width:100%;position:relative;z-index:0}
+.lmini.sm{height:200px}
+.minimap .maphint{z-index:5}
+.lpin{background:none;border:0}
+.lpin svg{display:block;overflow:visible;filter:drop-shadow(0 2px 3px rgba(0,0,0,.28));transform-origin:50% 100%;transition:transform .2s;cursor:pointer}
+.lpin.sel svg{transform:scale(1.3)}
+.lpin.sel svg path{stroke:var(--ink);stroke-width:3}
+.lme{background:none;border:0}
+.lme i{display:block;width:16px;height:16px;margin:3px;border-radius:50%;background:#2F7BF6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(47,123,246,.22),0 1px 4px rgba(0,0,0,.3)}
+.lrad{stroke:var(--brand);fill:var(--brand)}
+.leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--surface) 80%,transparent);color:var(--muted,#667)}
+.leaflet-container .leaflet-control-attribution a{color:inherit}
+.leaflet-container .leaflet-attribution-flag{display:none!important}
+.leaflet-container svg{max-width:none}
 </style>
 </head>
 <body>
@@ -549,6 +568,8 @@ body.loading #main{opacity:.55;pointer-events:none;transition:opacity .2s}
 <noscript><p style="padding:20px">Joyli има нужда от включен JavaScript.</p></noscript>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>window.supabase||document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>')</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>')</script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>

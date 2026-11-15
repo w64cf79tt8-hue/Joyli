@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115172124";
+const JOYLI_BUILD="20261115174616";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -203,7 +203,7 @@ const normInt=i=>i&&Array.isArray(i.picks)&&(i.picks.length||(i.ages||[]).length
 function U(){const p=LIVE.me;if(!p)return GUEST;
   return{name:p.full_name||"",role:p.role,status:p.status,orgId:p.role==="org"?p.id:null,bookings:activeBookings(),favs:LIVE.favs,myReviews:LIVE.myReviews,
     interests:normInt(p.interests),follows:LIVE.follows,favCities:p.fav_cities||[],notif:p.notify,polVer:p.policy_version,polAt:p.policy_accepted_at?Date.parse(p.policy_accepted_at):null,city:p.home_city}}
-const activeBookings=()=>LIVE.bookings.filter(b=>b.status!=="cancelled").map(b=>b.event_id);
+const activeBookings=()=>LIVE.bookings.filter(b=>b.status!=="cancelled"&&curBk(b)).map(b=>b.event_id);
 Object.defineProperty(S,"me",{get:()=>LIVE.me?LIVE.me.id:null});
 Object.defineProperty(S,"bookings",{get:activeBookings});
 Object.defineProperty(S,"favs",{get:()=>LIVE.favs});
@@ -220,11 +220,17 @@ const findEv=id=>LIVE.events.find(x=>x.id===id);
 function persist(){try{localStorage.setItem(LS,JSON.stringify({city:S.city,pos:S.pos,posSrc:S.posSrc,radius:S.radius,guestInterests:S.guestInterests,seenWelcome:S.seenWelcome,tipOff:saved.tipOff}))}catch(e){}}
 const PALS=["#C2527A","#E2895E","#6146B6","#2E8C6C","#3569B3","#21504C","#2B7A73","#B23F5C"];
 function orgEntry(id,name,bio,avatar){return{name:name||"Организатор",ini:((name||"О").replace(/[^А-Яа-яA-Za-z]/g,"")[0]||"О").toUpperCase(),bio:bio||"",avatar:avatar||null,col:PALS[hash(id)%PALS.length]}}
+// седмично събитие: следващата дата, която още не е минала (часът остава същият и при смяна на лятно време)
+function nextOcc(s,dur,weekly){if(!weekly)return s;const d=new Date(s),now=Date.now(),m=(dur||60)*6e4;if(d.getTime()+m>now)return s;
+  const k=Math.max(0,Math.floor((now-d.getTime()-m)/6048e5));d.setDate(d.getDate()+7*k);while(d.getTime()+m<=now)d.setDate(d.getDate()+7);return d.toISOString()}
+const WEVERY=["всяка неделя","всеки понеделник","всеки вторник","всяка сряда","всеки четвъртък","всеки петък","всяка събота"];
+// резервацията важи за текущата дата на събитието
+const curBk=b=>{const e=findEv(b.event_id);return!e||!e.repeat||!b.occurs_at||Math.abs(Date.parse(b.occurs_at)-Date.parse(e.start))<12*36e5};
 const isExt=id=>String(id||"").startsWith("ext:");
 const extKey=n=>"ext:"+String(n).trim().toLowerCase().replace(/\s+/g," ");
 function mapEv(r){const xo=r.ext_org&&r.ext_org.trim()?extKey(r.ext_org):null;if(xo&&!ORGS[xo])ORGS[xo]=orgEntry(xo,r.ext_org.trim());
-  return{id:r.id,city:r.city_id,cat:r.age,type:r.type,title:r.title,org:xo||r.organizer_id,owner:r.organizer_id,ext:r.ext_url||null,extOrg:r.ext_org||null,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
-  venue:r.venue||(ORGS[xo||r.organizer_id]?.name)||"",address:r.address||"",area:r.area,lat:+r.lat,lng:+r.lng,start:r.starts_at,cap:r.capacity,mod:r.mod_status,modNote:r.mod_note,cancelled:r.cancelled,
+  return{id:r.id,city:r.city_id,cat:r.age,type:r.type,title:r.title,org:xo||r.organizer_id,owner:r.organizer_id,ext:r.ext_url||null,extOrg:r.ext_org||null,repeat:!!r.repeat_weekly,start0:r.starts_at,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
+  venue:r.venue||(ORGS[xo||r.organizer_id]?.name)||"",address:r.address||"",area:r.area,lat:+r.lat,lng:+r.lng,start:nextOcc(r.starts_at,r.duration_min,r.repeat_weekly),cap:r.capacity,mod:r.mod_status,modNote:r.mod_note,cancelled:r.cancelled,
   updatedAt:r.updated_at?Date.parse(r.updated_at):null,createdAt:Date.parse(r.created_at),reviews:[],pop:0,sampleAtt:[]}}
 
 /* ================= ПОМОЩНИ ================= */
@@ -418,10 +424,10 @@ function renderMap(){
   const list=filterEvents(S.F);
   if(!list.find(e=>e.id===S.sel))S.sel=list[0]?.id||null;
   const sel=list.find(e=>e.id===S.sel);
-  const v=MV[S.city];
+  const v=MV[S.city];S.mapList=list;
   return `<div class="bar px" style="grid-template-columns:1fr"><div class="seg2"><button type="button" data-tab="events">Списък</button><button type="button" class="on">Карта</button></div></div>
   <div class="px" style="padding-bottom:0">${pillsHTML()}</div>
-  <div class="mapwrap" id="mapwrap">${mapSVG({events:list,cityLabel:true,slice:true,radius:S.F.near,anim:true,vb:v?[v.x,v.y,v.w,v.h]:null,k:v?v.w/v.base:1})}
+  <div class="mapwrap" id="mapwrap">${hasL()?`<div class="lslot" id="lslot"></div>`:mapSVG({events:list,cityLabel:true,slice:true,radius:S.F.near,anim:true,vb:v?[v.x,v.y,v.w,v.h]:null,k:v?v.w/v.base:1})}
     <button type="button" class="mapchip" data-loc>${uiFill("pin")}<span>${esc(S.posSrc==="area"?city().name:nearestArea(userPos())+", "+city().name)}</span>${ui("down")}</button>
     ${list.length?"":`<div class="maphint" style="top:58px">Няма събития по тези филтри.</div>`}
     <div class="mapctl" id="mapctl" style="bottom:${sel?"138px":"16px"}"><button type="button" class="mz" data-mz="in" aria-label="Увеличи">${ui("plus")}</button><button type="button" class="mz" data-mz="out" aria-label="Намали"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button><button type="button" class="mz me" data-mme aria-label="Покажи къде съм">${ui("nav")}</button></div>
@@ -524,7 +530,7 @@ function eventHTML(id){
     <div class="chips"><span class="chip-a">${catOf(e.cat).label}</span><span class="chip-t">${typeOf(e.type).label}</span>${e.cancelled?`<span class="tg warn">Отменено</span>`:""}</div>
     ${e.updatedAt&&mine&&!e.cancelled?`<p class="hint"><span class="tg">Обновено</span> Организаторът промени детайлите. Провери часа и мястото.</p>`:""}
     <div class="info">
-      <div>${ui("cal")}<span>${longDate(d)}</span></div>
+      <div>${ui("cal")}<span>${longDate(d)}${e.repeat?`<small>Повтаря се ${WEVERY[d.getDay()]}</small>`:""}</span></div>
       <div>${ui("clock")}<span>${hm(d)} – ${hm(end)}</span></div>
       <div>${ui("pin")}<span>${esc(e.venue)}<small>${esc(e.address||"")}${e.address?", ":""}кв. ${esc(e.area)}, ${esc(cityName(e.city))}</small></span>${km!=null?`<em>${fmtKm(km)}</em>`:""}</div>
       <div>${ui("euro")}<span>${price(e.price)}</span></div>
@@ -611,7 +617,7 @@ function dashHTML(){
     <div style="min-width:0;display:grid;gap:4px"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(d)} · ${esc(e.area)}</span></span><span>${e.mod==="pending"?`<span class="tg pend">Чака одобрение</span>`:""}${e.mod==="rejected"?`<span class="tg warn">Отказано</span>`:""}${e.mod==="hidden"?`<span class="tg warn">Скрито от администратор</span>`:""}${e.cancelled?`<span class="tg warn">Отменено</span>`:""}${e.updatedAt?`<span class="tg">Редактирано</span>`:""}<span class="tg">${catOf(e.cat).short}</span></span>${e.mod==="rejected"&&e.modNote?`<span class="hint">Причина: ${esc(e.modNote)}</span>`:""}</div>
     <div class="full btnrow"><button type="button" class="btn ghost sm" data-open="${e.id}">Виж</button><button type="button" class="btn ghost sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${e.cancelled?`<button type="button" class="btn ghost sm" data-restore="${e.id}">Възстанови</button>`:`<button type="button" class="btn ghost sm" data-cancelask="${e.id}">Отмени</button>`}</div>
     <div class="full box" id="ca-${e.id}" hidden><span class="hint">Сигурен ли си? Събитието изчезва от търсенето, а записаните ще видят, че е отменено.</span><div class="btnrow"><button type="button" class="btn sm" data-cancel="${e.id}">Да, отмени</button><button type="button" class="btn ghost sm" data-cancelno="${e.id}">Не</button></div></div>
-    <div class="full">${e.cancelled?"":e.booking?(at.length?at.map(a=>`<div class="att"><span>${esc(a.name)} · <b class="code">${a.code}</b> · <span class="st ${a.st}">${a.st==="attended"?(feeFor(a)?"дойде · "+feeFor(a)+" €":"дойде"):a.st==="no_show"?"не дойде":"очаква се"}</span></span><span style="display:flex;gap:6px"><button type="button" class="btn sm" data-att="${a.id}" data-v="attended">Дойде</button><button type="button" class="btn ghost sm" data-att="${a.id}" data-v="no_show">Не дойде</button></span></div>`).join(""):`<p class="hint">Още няма резервации.</p>`):`<p class="hint">Свободен вход, без резервации и без такса.</p>`}</div></div>`}).join("")||emptyBox(`Нямаш събития в ${esc(city().name)}. Публикувай първото.`)}
+    <div class="full">${e.cancelled?"":e.booking?(at.length?at.map(a=>`<div class="att"><span>${e.repeat&&a.when?whenShort(new Date(a.when))+" · ":""}${esc(a.name)} · <b class="code">${a.code}</b> · <span class="st ${a.st}">${a.st==="attended"?(feeFor(a)?"дойде · "+feeFor(a)+" €":"дойде"):a.st==="no_show"?"не дойде":"очаква се"}</span></span><span style="display:flex;gap:6px"><button type="button" class="btn sm" data-att="${a.id}" data-v="attended">Дойде</button><button type="button" class="btn ghost sm" data-att="${a.id}" data-v="no_show">Не дойде</button></span></div>`).join(""):`<p class="hint">Още няма резервации.</p>`):`<p class="hint">Свободен вход, без резервации и без такса.</p>`}</div></div>`}).join("")||emptyBox(`Нямаш събития в ${esc(city().name)}. Публикувай първото.`)}
 </div>`;
 }
 function historyHTML(){
@@ -1003,7 +1009,7 @@ const ERR_BG=[
   [/rate limit|too many/i,"Твърде много опити. Изчакай малко и опитай пак."],
   [/Failed to fetch|NetworkError|network/i,"Няма връзка с интернет. Провери връзката и опитай пак."],
   [/JWT|session/i,"Сесията изтече. Влез отново."],
-  [/ext_url|ext_org|schema cache/i,"Базата не е обновена. Пусни обновлението от стъпка 4 в „Joyli SQL“ и опитай пак."],
+  [/ext_url|ext_org|repeat_weekly|occurs_at|schema cache/i,"Базата не е обновена. Пусни обновленията (стъпки 4 и 5) от „Joyli SQL“ и опитай пак."],
   [/Bucket not found/i,"Липсва хранилището за снимки в Supabase."],
   [/row-level security/i,"Нямаш права за това действие."],
   [/payload too large|exceeded the maximum/i,"Снимката е твърде голяма."]
@@ -1032,7 +1038,9 @@ const LOAD={
     LIVE.admin.users.forEach(u=>{if(u.role==="org"&&!ORGS[u.id])ORGS[u.id]=orgEntry(u.id,u.full_name)});
     LIVE.events.forEach(e=>{if(e.extOrg&&!ORGS[e.org])ORGS[e.org]=orgEntry(e.org,e.extOrg.trim())})},
   async events(){const since=new Date(Date.now()-2*864e5).toISOString();
-    const rows=await q(sb.from("events").select("*").gte("starts_at",since).order("starts_at").limit(3000));
+    const[one,wk]=await Promise.all([q(sb.from("events").select("*").gte("starts_at",since).order("starts_at").limit(3000)),
+      q(sb.from("events").select("*").eq("repeat_weekly",true).lt("starts_at",since).limit(1000)).catch(()=>[])]);
+    const rows=one.concat(wk);
     const st=await q(sb.from("event_stats").select("event_id,taken,rating,reviews"));LIVE.stats={};st.forEach(s=>LIVE.stats[s.event_id]=s);
     // моите минали резервации също трябва да се виждат (история)
     LIVE.events=rows.map(mapEv)},
@@ -1043,7 +1051,7 @@ const LOAD={
     const uid=session.user.id;LIVE.email=S.email=session.user.email;
     const p=await q(sb.from("profiles").select("*").eq("id",uid).maybeSingle());LIVE.me=p;if(!p)return;
     const[bk,fv,fl,rv]=await Promise.all([
-      q(sb.from("bookings").select("id,event_id,status,code,created_at").eq("user_id",uid)),
+      q(sb.from("bookings").select("id,event_id,status,code,created_at,occurs_at").eq("user_id",uid)).catch(()=>q(sb.from("bookings").select("id,event_id,status,code,created_at").eq("user_id",uid))),
       q(sb.from("favorites").select("event_id").eq("user_id",uid)),
       q(sb.from("follows").select("organizer_id").eq("user_id",uid)),
       q(sb.from("reviews").select("event_id,rating,comment").eq("user_id",uid))]);
@@ -1063,14 +1071,14 @@ const LOAD={
     LIVE.threads=ts.map(t=>({id:t.id,from:t.user_id,subject:t.subject,status:t.status,ua:t.unread_admin,uu:t.unread_user,
       items:ms.filter(m=>m.thread_id===t.id).map(m=>({by:m.from_admin?"admin":"user",text:m.body,at:Date.parse(m.created_at)}))})).filter(t=>t.items.length)},
   async myFees(){const rows=await q(sb.from("organizer_fees").select("attendees,total_eur").eq("organizer_id",LIVE.me.id));LIVE.myFees=rows.reduce((s,r)=>s+(+r.total_eur||0),0)},
-  async attendees(eid){const rows=await q(sb.rpc("event_attendees",{p_event:eid}));LIVE.attendees[eid]=rows.map(r=>({id:r.booking_id,name:r.name||"Посетител",code:r.code,st:r.status}))},
+  async attendees(eid){const rows=await q(sb.rpc("event_attendees",{p_event:eid}));LIVE.attendees[eid]=rows.map(r=>({id:r.booking_id,name:r.name||"Посетител",code:r.code,st:r.status,when:r.occurs_at||null}))},
   async admin(){const[us,tot,cs]=await Promise.all([q(sb.rpc("admin_users")),q(sb.rpc("admin_totals")),q(sb.from("broadcasts").select("*").order("created_at",{ascending:false}).limit(50))]);
     LIVE.admin.users=us;LIVE.admin.totals=(tot&&tot[0])||{attended:0,fees:0};LIVE.admin.casts=cs.map(c=>({at:Date.parse(c.created_at),title:c.title,body:c.body,label:c.target,count:c.recipients}))},
   async all(){await Promise.all([LOAD.settings(),LOAD.content()]);await LOAD.me();await LOAD.orgs();await LOAD.events();if(LIVE.me&&LIVE.me.role==="org")await LOAD.orgs()}
 };
 
 /* ---------- помощни за изгледите ---------- */
-const bookingOf=id=>LIVE.bookings.find(b=>b.event_id===id&&b.status!=="cancelled")||LIVE.bookings.find(b=>b.event_id===id);
+const bookingOf=id=>LIVE.bookings.find(b=>b.event_id===id&&b.status!=="cancelled"&&curBk(b))||LIVE.bookings.find(b=>b.event_id===id&&curBk(b));
 function whoIs(id){if(LIVE.me&&id===LIVE.me.id)return{name:LIVE.me.full_name,role:LIVE.me.role,status:LIVE.me.status,email:LIVE.email};
   const u=LIVE.admin.users.find(x=>x.id===id);return u?{name:u.full_name,role:u.role,status:u.status,email:u.email}:{name:"Потребител",role:"user",status:"approved",email:""}}
 async function uploadImage(dataUrl,folder){
@@ -1130,10 +1138,11 @@ function zoomTo(newW,px,py){const m=mapEls(),v=MV[S.city];if(!m||!v)return;const
   const fx=(px-r.left)/r.width,fy=(py-r.top)/r.height,sx=v.x+fx*v.w,sy=v.y+fy*v.h,a=v.h/v.w;v.w=newW;v.h=newW*a;v.x=sx-fx*v.w;v.y=sy-fy*v.h;clampView(v);applyView()}
 function animView(t){const v=MV[S.city];if(!v)return;const f={x:v.x,y:v.y,w:v.w,h:v.h};if(reduced()){Object.assign(v,t);clampView(v);applyView();return}
   const t0=performance.now();const step=n=>{const p=Math.min(1,(n-t0)/280),e=1-Math.pow(1-p,3);["x","y","w","h"].forEach(k=>v[k]=f[k]+(t[k]-f[k])*e);applyView();if(p<1)requestAnimationFrame(step);else{clampView(v);applyView()}};requestAnimationFrame(step)}
-function zoomCenter(f){const v=MV[S.city];if(!v)return;const w=limW(v,v.w/f),h=w*v.h/v.w;animView({x:v.x+v.w/2-w/2,y:v.y+v.h/2-h/2,w,h})}
+function zoomCenter(f){if(hasL()&&LM){f>1?LM.zoomIn():LM.zoomOut();return}const v=MV[S.city];if(!v)return;const w=limW(v,v.w/f),h=w*v.h/v.w;animView({x:v.x+v.w/2-w/2,y:v.y+v.h/2-h/2,w,h})}
 function centerOn(px,py,w){const v=MV[S.city];if(!v)return;w=limW(v,w??v.w);const h=w*v.h/v.w;animView({x:px-w/2,y:py-h/2,w,h})}
-function centerMe(){const g=geom(city()),p=userPos(),[ux,uy]=proj(g,p.lat,p.lng),v=MV[S.city];if(v)centerOn(ux,uy,Math.min(v.w,v.base/2.4))}
+function centerMe(){if(hasL()&&LM){const p=userPos();LM.setView([p.lat,p.lng],Math.max(LM.getZoom(),14));return}const g=geom(city()),p=userPos(),[ux,uy]=proj(g,p.lat,p.lng),v=MV[S.city];if(v)centerOn(ux,uy,Math.min(v.w,v.base/2.4))}
 function selectPin(id){
+  if(hasL()&&LM){S.sel=id;lmSelect(id);return}
   S.sel=id;const m=mapEls();if(!m)return;
   m.svg.querySelectorAll(".pin").forEach(p=>p.classList.toggle("sel",p.dataset.pin===id));
   const el=m.svg.querySelector(`[data-pin="${id}"]`);if(el)el.parentNode.appendChild(el);
@@ -1155,6 +1164,7 @@ function bindMap(svg){
   svg.addEventListener("dblclick",e=>{e.preventDefault();const v=MV[S.city],r=svg.getBoundingClientRect();centerOn(v.x+(e.clientX-r.left)/r.width*v.w,v.y+(e.clientY-r.top)/r.height*v.h,v.w/1.8)});
 }
 function mapInit(){
+  if(hasL()){lmMain();return}
   const m=mapEls();if(!m)return;sizeMap();
   const r=m.w.getBoundingClientRect(),asp=r.height/r.width,g=geom(city());let v=MV[S.city];
   if(!v){let w=g.W*.92,h=w*asp;if(h<g.H*.92){h=g.H*.92;w=h/asp}v={x:g.W/2-w/2,y:g.H/2-h/2,w,h,base:w};MV[S.city]=v}
@@ -1164,6 +1174,92 @@ function mapInit(){
 }
 document.addEventListener("click",e=>{const b=e.target.closest("[data-mz],[data-mme]");if(!b)return;if(b.dataset.mz)zoomCenter(b.dataset.mz==="in"?1.7:1/1.7);else centerMe()});
 addEventListener("resize",()=>{if(S.tab==="map"&&!S.screens.length)mapInit()});
+
+/* ================= ИСТИНСКА КАРТА (Leaflet + OpenStreetMap) =================
+   Ако библиотеката не се зареди (няма интернет до CDN), остава старата схематична карта. */
+const hasL=()=>typeof window.L!=="undefined"&&!!window.L.map;
+const isDark=()=>{const t=document.documentElement.dataset.theme;return t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches)};
+function tiles(){return L.tileLayer(`https://{s}.basemaps.cartocdn.com/rastertiles/${isDark()?"dark_all":"voyager"}/{z}/{x}/{y}{r}.png`,
+  {subdomains:"abcd",maxZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'})}
+const cityCenter=c=>{const la=c.areas.map(a=>a[1]),ln=c.areas.map(a=>a[2]);return[(Math.min(...la)+Math.max(...la))/2,(Math.min(...ln)+Math.max(...ln))/2]};
+const areaIdx=(c,lat,lng)=>{let bi=0,bd=1e9;c.areas.forEach((a,i)=>{const d=dist(lat,lng,a[1],a[2]);if(d<bd){bd=d;bi=i}});return bi};
+function pinIcon(e,sel){return L.divIcon({className:"lpin"+(sel?" sel":""),iconSize:[34,46],iconAnchor:[17,45],
+  html:`<svg viewBox="-19 -48 38 50" width="34" height="46" data-pin="${e.id}" role="button" tabindex="0" aria-label="${esc(e.title)}"><path style="fill:var(--t-${e.type})" d="M0 0 C-8 -11 -17 -17 -17 -28 A17 17 0 1 1 17 -28 C17 -17 8 -11 0 0z" stroke="#fff" stroke-width="2.5"/><g transform="translate(-9.5 -37.5) scale(.8)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${UI[typeOf(e.type).icon]}</g></svg>`})}
+const meIcon=()=>L.divIcon({className:"lme",iconSize:[22,22],iconAnchor:[11,11],html:"<i></i>"});
+const dropIcon=()=>L.divIcon({className:"lpin sel",iconSize:[34,46],iconAnchor:[17,45],html:`<svg viewBox="-19 -48 38 50" width="34" height="46"><path style="fill:var(--brand)" d="M0 0 C-8 -11 -17 -17 -17 -28 A17 17 0 1 1 17 -28 C17 -17 8 -11 0 0z" stroke="#fff" stroke-width="2.5"/><circle cx="0" cy="-28" r="6" fill="#fff"/></svg>`});
+
+/* ---------- основната карта (раздел „Карта“) ---------- */
+let LM=null,LMel=null,LMlayer=null,LMcity=null,LMm={};
+function lmSize(){const w=document.getElementById("mapwrap");if(!w)return;const top=w.getBoundingClientRect().top,nav=document.querySelector("nav.tabs");w.style.height=Math.max(340,Math.round(innerHeight-top-(nav?nav.offsetHeight:0)))+"px"}
+function lmMain(){
+  const slot=document.getElementById("lslot");if(!slot)return;
+  if(!LM){LMel=document.createElement("div");LMel.className="lmap";
+    LM=L.map(LMel,{zoomControl:false,attributionControl:true,minZoom:9});tiles().addTo(LM);LM.attributionControl.setPrefix(false);LMlayer=L.layerGroup().addTo(LM);
+    LM.on("dragstart zoomstart",()=>{mapDragged=true});LM.on("moveend zoomend",()=>setTimeout(()=>{mapDragged=false},80))}
+  slot.appendChild(LMel);lmSize();LM.invalidateSize();
+  if(LMcity!==S.city){LM.setView(cityCenter(city()),12);LMcity=S.city}
+  lmDraw();
+  if(!S.mapHintShown){S.mapHintShown=1;toast("Влачи картата с пръст и увеличавай с два пръста")}
+}
+function lmDraw(){
+  if(!LM)return;LMlayer.clearLayers();LMm={};
+  const p=userPos();
+  if(S.F.near)L.circle([p.lat,p.lng],{radius:S.radius*1000,color:"#0E5551",className:"lrad",weight:1.5,fillOpacity:.07,interactive:false}).addTo(LMlayer);
+  L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false,keyboard:false,zIndexOffset:-100}).addTo(LMlayer);
+  (S.mapList||[]).forEach(e=>{if(!isFinite(e.lat)||!isFinite(e.lng))return;
+    LMm[e.id]=L.marker([e.lat,e.lng],{icon:pinIcon(e,S.sel===e.id),keyboard:false,zIndexOffset:S.sel===e.id?1000:0}).addTo(LMlayer)});
+}
+function lmSelect(id){
+  Object.entries(LMm).forEach(([k,m])=>{const e=findEv(k);if(e){m.setIcon(pinIcon(e,k===id));m.setZIndexOffset(k===id?1000:0)}});
+  const e=findEv(id);if(e)withDist([e]);
+  const pk=document.getElementById("peek");if(pk)pk.innerHTML=e?rowHTML(e):"";const ct=document.getElementById("mapctl");if(ct)ct.style.bottom=e?"138px":"16px";
+  if(e&&LMm[id])LM.panInside(LMm[id].getLatLng(),{paddingTopLeft:[20,70],paddingBottomRight:[20,170]});
+}
+
+/* ---------- „Къде си?“: докосни картата, за да посочиш мястото си ---------- */
+let LP=null;
+function lmPick(){
+  const el=document.getElementById("locLmap");if(!el)return;if(LP){LP.remove();LP=null}
+  const p=userPos(),c=city();
+  LP=L.map(el,{zoomControl:false,attributionControl:true});tiles().addTo(LP);LP.attributionControl.setPrefix(false);
+  LP.setView(S.posSrc==="area"?cityCenter(c):[p.lat,p.lng],S.posSrc==="area"?12:14);
+  const me=L.marker([p.lat,p.lng],{icon:meIcon(),interactive:false}).addTo(LP);
+  const rc=L.circle([p.lat,p.lng],{radius:S.radius*1000,color:"#0E5551",className:"lrad",weight:1.5,fillOpacity:.07,interactive:false}).addTo(LP);LP._rc=rc;
+  LP.on("click",ev=>{S.pos={lat:ev.latlng.lat,lng:ev.latlng.lng,city:S.city};S.posSrc="pin";persist();me.setLatLng(ev.latlng);rc.setLatLng(ev.latlng);
+    const h=el.parentNode.querySelector(".maphint");if(h)h.textContent="Ти си тук: "+nearestArea(userPos());renderTab()});
+  setTimeout(()=>LP&&LP.invalidateSize(),350);
+}
+
+/* ---------- адрес → точно място (OpenStreetMap / Nominatim) ---------- */
+const GEO={};
+async function geocode(addr,c){
+  const clean=String(addr).replace(/№\s*/g,"").replace(/\s+/g," ").trim();if(!clean)return null;
+  const key=c.id+"|"+clean.toLowerCase();if(key in GEO)return GEO[key];
+  const ctr=cityCenter(c),base="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=bg&accept-language=bg&";
+  const tries=[base+"q="+encodeURIComponent(clean+", "+c.name+", България"),
+    base+"street="+encodeURIComponent(clean.replace(/^(ул\.|улица|бул\.|булевард|пл\.|площад)\s*/i,""))+"&city="+encodeURIComponent(c.name)];
+  for(const u of tries){
+    const r=await fetch(u,{headers:{Accept:"application/json"}});if(!r.ok)throw new Error("geocode "+r.status);
+    const hit=(await r.json()).find(h=>dist(ctr[0],ctr[1],+h.lat,+h.lon)<30);
+    if(hit)return GEO[key]={lat:+hit.lat,lng:+hit.lon,label:String(hit.display_name||"").split(",").slice(0,3).join(",")};
+  }
+  return GEO[key]=null;
+}
+
+/* ---------- малка карта във формата за събитие ---------- */
+let LF=null;
+function lmForm(getCity,onPick){
+  const el=document.getElementById("fMap");if(!el)return null;if(LF){LF.remove();LF=null}
+  const c=getCity(),pt=newEv.pt;
+  LF=L.map(el,{zoomControl:false,attributionControl:true});tiles().addTo(LF);LF.attributionControl.setPrefix(false);
+  LF.setView(pt?[pt.lat,pt.lng]:cityCenter(c),pt?16:12);
+  let mk=pt?L.marker([pt.lat,pt.lng],{icon:dropIcon(),interactive:false}).addTo(LF):null;
+  LF.on("click",ev=>onPick(ev.latlng.lat,ev.latlng.lng,"Мястото е посочено на картата."));
+  LF.place=(lat,lng,zoom)=>{if(mk)mk.setLatLng([lat,lng]);else mk=L.marker([lat,lng],{icon:dropIcon(),interactive:false}).addTo(LF);LF.setView([lat,lng],zoom||Math.max(LF.getZoom(),16))};
+  LF.recenter=()=>{if(mk){mk.remove();mk=null}LF.setView(cityCenter(getCity()),12)};
+  setTimeout(()=>LF&&LF.invalidateSize(),350);
+  return LF;
+}
 
 /* ================= РЕНДЕР ================= */
 const TABS={home:renderHome,events:renderEvents,map:renderMap,saved:renderSaved,profile:renderProfile};
@@ -1215,10 +1311,11 @@ function openLocation(msg){
    ${loggedIn()?`<button type="button" class="btn ${isFavC?"ghost":"line"} sm" data-favcity style="justify-self:start">${isFavC?uiFill("heart")+" "+esc(city().name)+" е в любими":ui("heart")+" Добави "+esc(city().name)+" в любими"}</button>`:""}
    <button type="button" class="btn block" data-gps>${ui("locate")} Намери ме автоматично</button>
    ${msg?`<p class="err">${esc(msg)}</p>`:""}
-   <div class="minimap" id="locMap">${mapSVG({radius:true,kind:"pick"})}<div class="maphint">${S.posSrc==="area"?"Докосни картата, за да посочиш къде си":"Ти си тук: "+esc(nearestArea(userPos()))}</div></div>
+   <div class="minimap" id="locMap">${hasL()?`<div class="lmini" id="locLmap"></div>`:mapSVG({radius:true,kind:"pick"})}<div class="maphint">${S.posSrc==="area"?"Докосни картата, за да посочиш къде си":"Ти си тук: "+esc(nearestArea(userPos()))}</div></div>
    <p class="hint">${ui("check","i",2.4)} Местоположението остава само на телефона ти. Не го изпращаме и не го пазим.</p>
    <label class="radius"><span>Около мен</span><input id="radius2" type="range" min="1" max="15" step="1" value="${S.radius}"><output id="radiusOut2">${S.radius} км</output></label>
    <button type="button" class="btn ghost block" data-close>Готово</button>`);
+  if(hasL())lmPick();
 }
 function openNotifOld(){
   const l=notifications();if(U().justApproved){U().justApproved=false;persist()}
@@ -1241,7 +1338,7 @@ function openEventForm(editId,dupId){
   // админът публикува от името на външен организатор (с линк за записване)
   const adm=isAdmin()&&(!ex||!!ex.extOrg||ex.owner===LIVE.me.id);
   let c=src?CITIES.find(x=>x.id===src.city):city();
-  newEv={icon:src?src.icon:"paint",photo:src?src.photo||null:null};
+  newEv={icon:src?src.icon:"paint",photo:src?src.photo||null:null,pt:src&&isFinite(src.lat)?{lat:src.lat,lng:src.lng}:null,moved:!ex&&!!src,exact:!!src};
   const sd=src?new Date(src.start):new Date(today.getTime()+864e5+10.5*36e5);
   const v=src?{...src}:{title:"",cat:"k37",type:"workshop",area:c.areas[0][0],address:"",price:0,dur:60,cap:20,booking:!adm,desc:""};
   const booked=ex?bookedCount(ex):0;
@@ -1258,8 +1355,11 @@ function openEventForm(editId,dupId){
       <div class="upl" style="margin-top:6px"><div class="prev" id="fPrev"></div><label class="btn ghost sm" style="cursor:pointer">Качи снимка<input type="file" id="fPhoto" accept="image/*" hidden></label><button type="button" class="btn ghost sm" id="fNoPhoto" hidden>Махни снимката</button></div>
       <div class="icopick" id="icoPick" style="margin-top:8px"></div></div>
     <label>Място (зала, клуб, парк)<input type="text" id="fVenue" maxlength="60" value="${esc(src?src.venue:(ORGS[myOrg()]?.name||""))}"></label>
-    <div class="row2"><label class="field"><span id="fAreaL">Квартал (${esc(c.name)})</span><select id="fArea">${areaOpts()}</select></label><label>Адрес<input type="text" id="fAddr" maxlength="60" value="${esc(v.address||"")}"></label></div>
+    <div class="row2"><label class="field"><span id="fAreaL">Квартал (${esc(c.name)})</span><select id="fArea">${areaOpts()}</select></label><label>Адрес<input type="text" id="fAddr" maxlength="80" value="${esc(v.address||"")}" placeholder="ул. Шипка 12"></label></div>
+    <div style="display:grid;gap:8px">${hasL()?`<div class="minimap"><div class="lmini sm" id="fMap"></div><div class="maphint" id="fGeoHint"></div></div>`:`<p class="hint" id="fGeoHint"></p>`}
+      <button type="button" class="btn ghost sm" id="fFind" style="justify-self:start">${ui("pin")} Намери адреса на картата</button></div>
     <div class="row2"><label>Дата<input type="date" id="fDate" value="${ymd(sd)}"></label><label>Час<input type="time" id="fTime" value="${hm(sd)}"></label></div>
+    <label class="check"><input type="checkbox" id="fRep"${v.repeat?" checked":""}> <span id="fRepL">Повтаря се ${WEVERY[sd.getDay()]}</span></label>
     <div class="row2"><label>Цена (€)<input type="number" id="fPrice" min="0" step="1" value="${v.price}"></label><label>Продължителност (мин)<input type="number" id="fDur" min="15" step="15" value="${v.dur}"></label></div>
     ${adm?"":`<label class="check"><input type="checkbox" id="fBook"${v.booking?" checked":""}> Позволи запазване на място</label>
     <label>Брой места<input type="number" id="fCap" min="1" value="${v.cap||12}"${v.booking?"":" disabled"}></label>`}
@@ -1271,16 +1371,30 @@ function openEventForm(editId,dupId){
     $("#icoPick").innerHTML=ART_KEYS.map(k=>`<button type="button" data-ico="${k}" class="${!newEv.photo&&newEv.icon===k?"on":""}" aria-label="Илюстрация ${k}">${cover("pick"+k,t,k,{small:true})}</button>`).join("");$("#fNoPhoto").hidden=!newEv.photo};
   drawPrev();
   $("#fType").addEventListener("change",drawPrev);
+  $("#fDate").addEventListener("change",e=>{const p=e.target.value.split("-").map(Number);if(p.length===3)$("#fRepL").textContent="Повтаря се "+WEVERY[new Date(p[0],p[1]-1,p[2]).getDay()]});
   $("#icoPick").addEventListener("click",ev=>{const b=ev.target.closest("[data-ico]");if(!b)return;ev.stopPropagation();newEv.icon=b.dataset.ico;newEv.photo=null;drawPrev()});
   $("#fNoPhoto").addEventListener("click",ev=>{ev.stopPropagation();newEv.photo=null;drawPrev()});
   $("#fPhoto").addEventListener("change",ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{const W=1200,sc=Math.min(1,W/im.width),cv=document.createElement("canvas");cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);newEv.photo=cv.toDataURL("image/jpeg",.75);drawPrev()};im.onerror=()=>toast("Файлът не е снимка. Опитай с JPG или PNG.");im.src=rd.result};rd.readAsDataURL(f)});
   if(!adm)$("#fBook").addEventListener("change",e=>{$("#fCap").disabled=!e.target.checked});
-  if(adm)$("#fCity").addEventListener("change",e=>{c=CITIES.find(x=>x.id===e.target.value);v.area=c.areas[0][0];$("#fArea").innerHTML=areaOpts();$("#fAreaL").textContent=`Квартал (${c.name})`});
-  $("#evForm").addEventListener("submit",ev=>{
+  // точно място: търсене на адреса или докосване на картата
+  const geoHint=m=>{const h=$("#fGeoHint");if(h)h.textContent=m};
+  const setPt=(lat,lng,msg)=>{newEv.pt={lat,lng};newEv.moved=true;newEv.exact=true;$("#fArea").value=String(areaIdx(c,lat,lng));geoHint(msg);if(LF)LF.place(lat,lng)};
+  geoHint(newEv.pt&&src?(ex?"Мястото на събитието е отбелязано. Ако смениш адреса, ще го потърсим отново.":"Мястото е копирано от събитието."):hasL()?"Въведи адрес и натисни „Намери адреса на картата“ или докосни картата.":"Въведи адрес и натисни „Намери адреса на картата“.");
+  if(hasL())lmForm(()=>c,setPt);
+  $("#fAddr").addEventListener("input",()=>{newEv.exact=false});
+  const findAddr=async()=>{const ad=$("#fAddr").value.trim();if(!ad){geoHint("Първо въведи адрес.");return null}
+    geoHint("Търсим адреса…");try{const g=await geocode(ad,c);if(g){setPt(g.lat,g.lng,"Намерено: "+g.label);return g}geoHint("Не открихме този адрес в "+c.name+". Провери улицата и номера"+(hasL()?" или докосни картата.":"."));return null}
+    catch(e){geoHint("Търсенето на адреса не работи в момента."+(hasL()?" Докосни картата, за да посочиш мястото.":""));return false}};
+  $("#fFind").addEventListener("click",ev=>{ev.stopPropagation();findAddr()});
+  if(adm)$("#fCity").addEventListener("change",e=>{c=CITIES.find(x=>x.id===e.target.value);v.area=c.areas[0][0];$("#fArea").innerHTML=areaOpts();$("#fAreaL").textContent=`Квартал (${c.name})`;
+    newEv.pt=null;newEv.moved=false;newEv.exact=false;if(LF)LF.recenter()});
+  $("#evForm").addEventListener("submit",async ev=>{
     ev.preventDefault();
     const err=m=>{const p=$("#fErr");p.textContent=m;p.hidden=false};
     const title=$("#fTitle").value.trim();if(!title)return err("Въведи заглавие на събитието.");
     if(!$("#fDate").value||!$("#fTime").value)return err("Избери дата и час.");
+    if($("#fAddr").value.trim()&&!newEv.exact){const sb2=ev.target.querySelector("button[type=submit]");sb2.disabled=true;const g=await findAddr();sb2.disabled=false;
+      if(g===null)return err("Не открихме адреса на картата. Провери улицата и номера"+(hasL()?" или докосни картата, за да посочиш мястото.":"."))}
     const a=c.areas[+$("#fArea").value];
     const[y,mo,da]=$("#fDate").value.split("-").map(Number),[hh,mm]=$("#fTime").value.split(":").map(Number),start=new Date(y,mo-1,da,hh,mm);
     if(start.getTime()<Date.now()-36e5&&(!ex||start.getTime()!==new Date(ex.start).getTime()))return err("Датата е в миналото. Избери бъдещ ден и час.");
@@ -1293,9 +1407,10 @@ function openEventForm(editId,dupId){
     if(ex&&book&&cap<booked)return err(`Вече има ${booked} записани. Местата не може да са по-малко от тях.`);
     if(ex&&!book&&booked)return err(`Има ${booked} записани. Остави резервациите включени или първо ги уведоми.`);
     if(title.length<3)return err("Заглавието трябва да е поне 3 знака.");
-    const f={title,age:$("#fCat").value,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};
+    const f={title,age:$("#fCat").value,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};if($("#fRep").checked)f.repeat_weekly=true;else if(ex&&ex.repeat)f.repeat_weekly=false;
     if(adm)Object.assign(f,{ext_org:extOrg,ext_url:extUrl||null,city_id:c.id});
-    if(!ex||a[0]!==ex.area||c.id!==ex.city){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
+    if(newEv.moved&&newEv.pt)Object.assign(f,{area:a[0],lat:newEv.pt.lat,lng:newEv.pt.lng});
+    else if(!ex||a[0]!==ex.area||c.id!==ex.city){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
     const btn=ev.target.querySelector("button[type=submit]");btn.disabled=true;
     act(async()=>{
       f.photo_url=newEv.photo?await uploadImage(newEv.photo,"events"):null;
@@ -1443,7 +1558,7 @@ document.addEventListener("click",ev=>{
     if(S.tab==="saved")renderTab();else{const n=S.bookings.length+S.favs.filter(f=>!S.bookings.includes(f)).length,bd=$("#savedBadge");bd.hidden=!n;bd.textContent=n}return}
   if(ds.follow){if(need("open",null,"Влез, за да следиш организатори."))return;const oid=ds.follow,on=S.follows.includes(oid),nm=(ORGS[oid]||{}).name||"организатора";if(!on){const[x,y]=evXY(ev);sparkle(x,y)}
     act(()=>q(on?sb.from("follows").delete().eq("user_id",LIVE.me.id).eq("organizer_id",oid):sb.from("follows").insert({user_id:LIVE.me.id,organizer_id:oid})),{reload:["me"],ok:on?"Вече не следваш "+nm:"Следваш "+nm});return}
-  if(ds.book){if(need("book",ds.book,"Влез, за да запазиш място. Ще те върнем към събитието."))return;const eid=ds.book,[x,y]=evXY(ev),old=LIVE.bookings.find(b=>b.event_id===eid);
+  if(ds.book){if(need("book",ds.book,"Влез, за да запазиш място. Ще те върнем към събитието."))return;const eid=ds.book,[x,y]=evXY(ev),old=LIVE.bookings.find(b=>b.event_id===eid&&curBk(b));
     act(()=>q(old?sb.from("bookings").update({status:"booked"}).eq("id",old.id):sb.from("bookings").insert({event_id:eid,user_id:LIVE.me.id})),{reload:["me","events"]}).then(r=>{if(r){confetti(x,y);toast(`Мястото е запазено. Кодът ти е ${bookCode(eid)}. Очакваме те!`)}});return}
   if(ds.unbook){const b=bookingOf(ds.unbook);if(!b)return;act(()=>q(sb.from("bookings").update({status:"cancelled"}).eq("id",b.id)),{reload:["me","events"],ok:"Резервацията е отказана"});return}
   if(ds.rate){rateVal=+ds.rate;document.querySelectorAll("#ratePick button").forEach(b=>b.classList.toggle("on",+b.dataset.rate<=rateVal));return}
@@ -1472,6 +1587,7 @@ let rT=0;
 document.addEventListener("input",ev=>{
   const id=ev.target.id;
   if(id==="radius2"||id==="fRadius"){S.radius=+ev.target.value;persist();const o=$(id==="radius2"?"#radiusOut2":"#fRadiusOut");if(o)o.textContent=S.radius+" км";
+    if(LP&&LP._rc)LP._rc.setRadius(S.radius*1000);
     const g=geom(city());document.querySelectorAll(".m-rad").forEach(c=>c.setAttribute("r",(S.radius*g.pxKm).toFixed(1)));
     if(id==="fRadius"){const n=filterEvents(S.FD).length;$("#fApply").textContent=`Покажи ${n} ${n===1?"събитие":"събития"}`}
     clearTimeout(rT);rT=setTimeout(()=>{if(!sheetOpen()&&!S.screens.length)renderAll()},400)}
