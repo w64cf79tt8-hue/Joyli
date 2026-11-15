@@ -219,8 +219,11 @@ const findEv=id=>LIVE.events.find(x=>x.id===id);
 function persist(){try{localStorage.setItem(LS,JSON.stringify({city:S.city,pos:S.pos,posSrc:S.posSrc,radius:S.radius,guestInterests:S.guestInterests,seenWelcome:S.seenWelcome,tipOff:saved.tipOff}))}catch(e){}}
 const PALS=["#C2527A","#E2895E","#6146B6","#2E8C6C","#3569B3","#21504C","#2B7A73","#B23F5C"];
 function orgEntry(id,name,bio,avatar){return{name:name||"Организатор",ini:((name||"О").replace(/[^А-Яа-яA-Za-z]/g,"")[0]||"О").toUpperCase(),bio:bio||"",avatar:avatar||null,col:PALS[hash(id)%PALS.length]}}
-function mapEv(r){return{id:r.id,city:r.city_id,cat:r.age,type:r.type,title:r.title,org:r.organizer_id,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
-  venue:r.venue||(ORGS[r.organizer_id]?.name)||"",address:r.address||"",area:r.area,lat:+r.lat,lng:+r.lng,start:r.starts_at,cap:r.capacity,mod:r.mod_status,modNote:r.mod_note,cancelled:r.cancelled,
+const isExt=id=>String(id||"").startsWith("ext:");
+const extKey=n=>"ext:"+String(n).trim().toLowerCase().replace(/\s+/g," ");
+function mapEv(r){const xo=r.ext_org&&r.ext_org.trim()?extKey(r.ext_org):null;if(xo&&!ORGS[xo])ORGS[xo]=orgEntry(xo,r.ext_org.trim());
+  return{id:r.id,city:r.city_id,cat:r.age,type:r.type,title:r.title,org:xo||r.organizer_id,owner:r.organizer_id,ext:r.ext_url||null,extOrg:r.ext_org||null,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
+  venue:r.venue||(ORGS[xo||r.organizer_id]?.name)||"",address:r.address||"",area:r.area,lat:+r.lat,lng:+r.lng,start:r.starts_at,cap:r.capacity,mod:r.mod_status,modNote:r.mod_note,cancelled:r.cancelled,
   updatedAt:r.updated_at?Date.parse(r.updated_at):null,createdAt:Date.parse(r.created_at),reviews:[],pop:0,sampleAtt:[]}}
 
 /* ================= ПОМОЩНИ ================= */
@@ -511,6 +514,7 @@ function eventHTML(id){
   let cta;
   if(e.cancelled)cta=`<button type="button" class="btn block" disabled>Събитието е отменено</button>`;
   else if(!upcoming(e))cta=`<button type="button" class="btn block" disabled>Събитието приключи</button>`;
+  else if(e.ext)cta=`<a class="btn block" href="${esc(e.ext)}" target="_blank" rel="noopener">Запази място при организатора ${ui("arrow")}</a><p class="hint" style="text-align:center;margin:6px 0 0">Записването става на сайта на ${esc(O.name||"организатора")}.</p>`;
   else if(e.booking)cta=mine?`<div class="btnrow"><button type="button" class="btn ghost" data-unbook="${e.id}">Откажи</button><button type="button" class="btn" disabled style="opacity:1">${ui("check")} Запазено · код ${bookCode(e.id,S.me)}</button></div>`:`<button type="button" class="btn block" data-book="${e.id}" ${left===0?"disabled":""}>${left===0?"Няма свободни места":"Запази място "+ui("arrow")}</button>`;
   else cta=`<a class="btn block" href="${maps}" target="_blank" rel="noopener">Свободен вход · Как да стигна ${ui("nav")}</a>`;
   return `<div class="ev-hero">${eventArt(e,{small:true})}<div class="cbtns"><button type="button" class="cbtn" data-back aria-label="Назад">${ui("back")}</button><span class="sp"></span><button type="button" class="cbtn" data-share="${e.id}" aria-label="Сподели">${ui("share")}</button>${heartBtn(e,"cbtn")}</div></div>
@@ -526,11 +530,11 @@ function eventHTML(id){
       ${e.booking?`<div>${ui("people")}<span>${left} свободни от ${e.cap} места<div class="bar2"><i style="width:${Math.round(bc/e.cap*100)}%"></i></div></span></div>`:""}
     </div>
     <p class="desc">${esc(e.desc)}</p>
-    ${isAdmin()?`<div class="box"><b style="font-size:14px">Админ · <span class="tg ${MODL[modOf(e)][1]}">${MODL[modOf(e)][0]}</span></b><div class="btnrow"><button type="button" class="btn sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${modOf(e)!=="approved"?`<button type="button" class="btn ghost sm" data-mod="approve" data-id="${e.id}">Одобри</button>`:`<button type="button" class="btn ghost sm" data-mod="hide" data-id="${e.id}">Скрий</button>`}</div></div>`:""}
+    ${isAdmin()?`<div class="box"><b style="font-size:14px">Админ · <span class="tg ${MODL[modOf(e)][1]}">${MODL[modOf(e)][0]}</span></b><div class="btnrow"><button type="button" class="btn sm" data-edit="${e.id}">${ui("edit")} Редактирай</button><button type="button" class="btn ghost sm" data-dup="${e.id}">Копирай</button>${modOf(e)!=="approved"?`<button type="button" class="btn ghost sm" data-mod="approve" data-id="${e.id}">Одобри</button>`:`<button type="button" class="btn ghost sm" data-mod="hide" data-id="${e.id}">Скрий</button>`}</div></div>`:""}
     ${own&&e.mod&&e.mod!=="approved"?`<p class="hint"><span class="tg ${MODL[e.mod][1]}">${MODL[e.mod][0]}</span> ${e.mod==="pending"?"Обявата ще се вижда, след като администратор я одобри.":esc(e.modNote||"")}</p>`:""}
     ${own?`<div class="box"><b style="font-size:14px">Това е твое събитие</b><div class="btnrow"><button type="button" class="btn sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${e.cancelled?`<button type="button" class="btn ghost sm" data-restore="${e.id}">Възстанови</button>`:`<button type="button" class="btn ghost sm" data-screen="dash">Записани и такси</button>`}</div></div>`:""}
     <div class="orgrow"><button type="button" class="open" data-orgpage="${e.org}"><div class="ava" style="background:${O.col}">${esc(O.ini)}</div><div style="min-width:0"><b>${esc(O.name)}</b><div class="hint">${orgRs.length?`<span class="stars">★</span> ${dec(avg(orgRs))} · ${orgRs.length} оценки`:"Организатор"}</div></div></button>
-      <button type="button" class="btn ${fol?"":"line "}sm" data-follow="${e.org}">${fol?"Следваш":"Следвай"}</button></div>
+      ${isExt(e.org)?"":`<button type="button" class="btn ${fol?"":"line "}sm" data-follow="${e.org}">${fol?"Следваш":"Следвай"}</button>`}</div>
     <div style="display:grid;gap:10px"><div class="sec" style="margin:4px 0 0"><h2>Оценки</h2>${rs.length?`<span><span class="stars">${starStr(avg(rs))}</span> <b>${dec(avg(rs))}</b></span>`:""}</div>
       <div class="rate-pick" id="ratePick" role="group" aria-label="Твоята оценка">${[1,2,3,4,5].map(i=>`<button type="button" data-rate="${i}" class="${i<=rateVal?"on":""}" aria-label="${i} звезди">★</button>`).join("")}</div>
       <textarea id="rText" placeholder="Как мина? Сподели с другите." maxlength="300" aria-label="Коментар">${mr?esc(mr.text):""}</textarea>
@@ -583,7 +587,7 @@ function orgPageHTML(o){
   const here=evs.filter(e=>e.city===S.city),else_=evs.filter(e=>e.city!==S.city);
   return `<header class="band prof-top px"><button type="button" class="icon-btn" data-back aria-label="Назад" style="position:absolute;left:max(14px,env(safe-area-inset-left,0px));top:12px">${ui("back")}</button>
    <div class="bigava" style="background:${O.col};color:#fff">${esc(O.ini)}</div><h2>${esc(O.name)}</h2><small>${rs.length?`★ ${dec(avg(rs))} · ${rs.length} оценки`:"Още няма оценки"}</small>
-   <button type="button" class="btn ${fol?"white":"ghost"} sm" data-follow="${o}" style="margin-top:6px">${fol?uiFill("heart")+" Следваш":ui("heart")+" Следвай"}</button></header>
+   ${isExt(o)?"":`<button type="button" class="btn ${fol?"white":"ghost"} sm" data-follow="${o}" style="margin-top:6px">${fol?uiFill("heart")+" Следваш":ui("heart")+" Следвай"}</button>`}</header>
   <div class="px"><div class="panel" style="margin-top:-22px;position:relative"><span>${esc(O.bio)}</span><div class="stats"><div class="stat"><b>${evs.length}</b><span>предстоящи</span></div><div class="stat"><b>${rs.length?dec(avg(rs)):"–"}</b><span>средна оценка</span></div><div class="stat"><b>${new Set(evs.map(e=>e.city)).size}</b><span>града</span></div></div></div>
   <div class="sec"><h2>В ${esc(city().name)}</h2><span class="hint">${here.length}</span></div><div class="rows">${here.length?here.map(rowHTML).join(""):emptyBox("Няма предстоящи събития в този град.")}</div>
   ${else_.length?`<div class="sec"><h2>В други градове</h2><span class="hint">${else_.length}</span></div><div class="rows">${else_.slice(0,6).map(rowHTML).join("")}</div>`:""}<div style="height:24px"></div></div>`;
@@ -667,9 +671,10 @@ function adminHTML(){
   const head=`<div class="bar px"><button type="button" class="icon-btn plain" data-back aria-label="Назад">${ui("back")}</button><h1>Админ панел</h1><span></span></div>
    <div class="px"><div class="pills" role="tablist">${tabs.map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${A.tab===k}" class="pill tabp${A.tab===k?" on":""}" data-atab="${k}">${l}${n?` <em class="cnt">${n}</em>`:""}</button>`).join("")}</div></div>`;
   let body="";
+  if(A.tab==="overview"||A.tab==="events")body=`<button type="button" class="btn block" data-newev style="margin-bottom:14px">${ui("plus")} Публикувай събитие</button>`;
   if(A.tab==="overview"){
     const users=LIVE.admin.users.filter(u=>u.role==="user").length,orgs=LIVE.admin.users.filter(u=>u.role==="org").length,live=liveEvents().filter(upcoming).length;
-    body=`<div class="tiles">
+    body+=`<div class="tiles">
       <button type="button" class="tile hot" data-atab="events"><b>${pe}</b><span>обяви чакат одобрение</span></button>
       <button type="button" class="tile hot" data-atab="users"><b>${pu}</b><span>регистрации за потвърждение</span></button>
       <button type="button" class="tile hot" data-atab="msgs"><b>${um}</b><span>непрочетени съобщения</span></button>
@@ -686,7 +691,7 @@ function adminHTML(){
     let l=allEvents().filter(e=>A.ev==="all"||modOf(e)===A.ev).filter(e=>A.city==="all"||e.city===A.city);
     const q=A.q.trim().toLowerCase();if(q)l=l.filter(e=>(e.title+" "+(ORGS[e.org]?.name||"")+" "+e.venue).toLowerCase().includes(q));
     l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)||new Date(a.start)-new Date(b.start));
-    body=`<div class="agegrid" style="margin-bottom:10px">${fl.map(([k,lb])=>`<button type="button" class="agebtn${A.ev===k?" on":""}" data-aev="${k}">${lb}${k==="pending"&&pendEvents().length?` (${pendEvents().length})`:""}</button>`).join("")}</div>
+    body+=`<div class="agegrid" style="margin-bottom:10px">${fl.map(([k,lb])=>`<button type="button" class="agebtn${A.ev===k?" on":""}" data-aev="${k}">${lb}${k==="pending"&&pendEvents().length?` (${pendEvents().length})`:""}</button>`).join("")}</div>
      <div class="row2" style="margin-bottom:12px"><input type="text" id="aQ" placeholder="Търси заглавие или организатор" value="${esc(A.q)}" aria-label="Търсене на обяви"><label class="field" style="display:block"><select id="aCity" aria-label="Град"><option value="all">Всички градове</option>${CITIES.map(c=>`<option value="${c.id}"${A.city===c.id?" selected":""}>${esc(c.name)}</option>`).join("")}</select></label></div>
      <div class="count">${l.length} обяви</div>
      <div class="rows" id="aEvList">${l.slice(0,A.lim).map(admEvRow).join("")||emptyBox("Няма обяви в този списък.")}</div>
@@ -1019,7 +1024,8 @@ const LOAD={
   async orgs(){const rows=await q(sb.from("organizers_public").select("id,name,bio,avatar_url"));Object.keys(ORGS).forEach(k=>delete ORGS[k]);
     rows.forEach(o=>{ORGS[o.id]=orgEntry(o.id,o.name,o.bio,o.avatar_url)});
     if(LIVE.me&&LIVE.me.role==="org"&&!ORGS[LIVE.me.id])ORGS[LIVE.me.id]=orgEntry(LIVE.me.id,LIVE.me.org_name||LIVE.me.full_name,LIVE.me.org_bio,LIVE.me.avatar_url);
-    LIVE.admin.users.forEach(u=>{if(u.role==="org"&&!ORGS[u.id])ORGS[u.id]=orgEntry(u.id,u.full_name)})},
+    LIVE.admin.users.forEach(u=>{if(u.role==="org"&&!ORGS[u.id])ORGS[u.id]=orgEntry(u.id,u.full_name)});
+    LIVE.events.forEach(e=>{if(e.extOrg&&!ORGS[e.org])ORGS[e.org]=orgEntry(e.org,e.extOrg.trim())})},
   async events(){const since=new Date(Date.now()-2*864e5).toISOString();
     const rows=await q(sb.from("events").select("*").gte("starts_at",since).order("starts_at").limit(3000));
     const st=await q(sb.from("event_stats").select("event_id,taken,rating,reviews"));LIVE.stats={};st.forEach(s=>LIVE.stats[s.event_id]=s);
@@ -1205,27 +1211,34 @@ function openSettings(){
 
 /* ================= ФОРМА ЗА СЪБИТИЕ ================= */
 let newEv={icon:"paint",photo:null};
-function openEventForm(editId){
-  const ex=editId?findEv(editId):null;
+function openEventForm(editId,dupId){
+  const ex=editId?findEv(editId):null,src=ex||(dupId?findEv(dupId):null);
   if(ex&&!ownsEvent(ex)&&!isAdmin()){toast("Можеш да редактираш само свои събития.");return}
-  const c=ex?CITIES.find(x=>x.id===ex.city):city();
-  newEv={icon:ex?ex.icon:"paint",photo:ex?ex.photo||null:null};
-  const sd=ex?new Date(ex.start):new Date(today.getTime()+864e5+10.5*36e5);
-  const v=ex||{title:"",cat:"k37",type:"workshop",area:c.areas[0][0],address:"",price:0,dur:60,cap:20,booking:true,desc:""};
+  // админът публикува от името на външен организатор (с линк за записване)
+  const adm=isAdmin()&&(!ex||!!ex.extOrg||ex.owner===LIVE.me.id);
+  let c=src?CITIES.find(x=>x.id===src.city):city();
+  newEv={icon:src?src.icon:"paint",photo:src?src.photo||null:null};
+  const sd=src?new Date(src.start):new Date(today.getTime()+864e5+10.5*36e5);
+  const v=src?{...src}:{title:"",cat:"k37",type:"workshop",area:c.areas[0][0],address:"",price:0,dur:60,cap:20,booking:!adm,desc:""};
   const booked=ex?bookedCount(ex):0;
-  openSheet(`${sheetHead(ex?"Редакция на събитие":"Ново събитие",ex&&booked?booked+" души са запазили място. Ще видят, че събитието е обновено.":ex?"":"Публикуването е безплатно.")}
+  const areaOpts=()=>c.areas.map((a,i)=>`<option value="${i}"${a[0]===v.area?" selected":""}>${esc(a[0])}</option>`).join("");
+  openSheet(`${sheetHead(ex?"Редакция на събитие":dupId?"Копие на събитие":"Ново събитие",ex&&booked?booked+" души са запазили място. Ще видят, че събитието е обновено.":ex?"":adm?"Публикува се веднага, без одобрение.":"Публикуването е безплатно.")}
   <form class="form" id="evForm" novalidate>
+    ${adm?`<label>Организатор<input type="text" id="fOrg" maxlength="80" value="${esc(src&&src.extOrg||"")}" placeholder="напр. Куклен театър „Приказка“"></label>
+    <label>Линк за запазване на място<input type="url" id="fExt" inputmode="url" value="${esc(src&&src.ext||"")}" placeholder="https://… (сайт или страница на организатора)"></label>
+    <p class="hint" style="margin:-4px 0 0">Посетителите ще отиват на този линк, за да запазят място. Остави празно при свободен вход.</p>
+    <label class="field">Град<select id="fCity">${CITIES.map(x=>`<option value="${x.id}"${x.id===c.id?" selected":""}>${esc(x.name)}</option>`).join("")}</select></label>`:""}
     <label>Заглавие<input type="text" id="fTitle" maxlength="80" value="${esc(v.title)}" placeholder="напр. Куклен театър „Пинокио“"></label>
     <div class="row2"><label class="field">Възраст<select id="fCat">${CATS.map(k=>`<option value="${k.key}"${k.key===v.cat?" selected":""}>${k.label} · ${k.sub}</option>`).join("")}</select></label><label class="field">Вид<select id="fType">${TYPES.map(t=>`<option value="${t.key}"${t.key===v.type?" selected":""}>${t.label}</option>`).join("")}</select></label></div>
     <div><span class="hint" style="font-weight:700">Корица</span>
       <div class="upl" style="margin-top:6px"><div class="prev" id="fPrev"></div><label class="btn ghost sm" style="cursor:pointer">Качи снимка<input type="file" id="fPhoto" accept="image/*" hidden></label><button type="button" class="btn ghost sm" id="fNoPhoto" hidden>Махни снимката</button></div>
       <div class="icopick" id="icoPick" style="margin-top:8px"></div></div>
-    <label>Място (зала, клуб, парк)<input type="text" id="fVenue" maxlength="60" value="${esc(ex?ex.venue:(ORGS[myOrg()]?.name||""))}"></label>
-    <div class="row2"><label class="field">Квартал (${esc(c.name)})<select id="fArea">${c.areas.map((a,i)=>`<option value="${i}"${a[0]===v.area?" selected":""}>${esc(a[0])}</option>`).join("")}</select></label><label>Адрес<input type="text" id="fAddr" maxlength="60" value="${esc(v.address||"")}"></label></div>
+    <label>Място (зала, клуб, парк)<input type="text" id="fVenue" maxlength="60" value="${esc(src?src.venue:(ORGS[myOrg()]?.name||""))}"></label>
+    <div class="row2"><label class="field"><span id="fAreaL">Квартал (${esc(c.name)})</span><select id="fArea">${areaOpts()}</select></label><label>Адрес<input type="text" id="fAddr" maxlength="60" value="${esc(v.address||"")}"></label></div>
     <div class="row2"><label>Дата<input type="date" id="fDate" value="${ymd(sd)}"></label><label>Час<input type="time" id="fTime" value="${hm(sd)}"></label></div>
     <div class="row2"><label>Цена (€)<input type="number" id="fPrice" min="0" step="1" value="${v.price}"></label><label>Продължителност (мин)<input type="number" id="fDur" min="15" step="15" value="${v.dur}"></label></div>
-    <label class="check"><input type="checkbox" id="fBook"${v.booking?" checked":""}> Позволи запазване на място</label>
-    <label>Брой места<input type="number" id="fCap" min="1" value="${v.cap||12}"${v.booking?"":" disabled"}></label>
+    ${adm?"":`<label class="check"><input type="checkbox" id="fBook"${v.booking?" checked":""}> Позволи запазване на място</label>
+    <label>Брой места<input type="number" id="fCap" min="1" value="${v.cap||12}"${v.booking?"":" disabled"}></label>`}
     <label>Описание<textarea id="fDesc" maxlength="600" placeholder="Какво ще правят, какво да вземат, за кого е подходящо.">${esc(v.desc)}</textarea></label>
     <p class="err" id="fErr" hidden></p>
     <button type="submit" class="btn block">${ex?"Запази промените":"Публикувай"}</button>
@@ -1237,7 +1250,8 @@ function openEventForm(editId){
   $("#icoPick").addEventListener("click",ev=>{const b=ev.target.closest("[data-ico]");if(!b)return;ev.stopPropagation();newEv.icon=b.dataset.ico;newEv.photo=null;drawPrev()});
   $("#fNoPhoto").addEventListener("click",ev=>{ev.stopPropagation();newEv.photo=null;drawPrev()});
   $("#fPhoto").addEventListener("change",ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{const W=1200,sc=Math.min(1,W/im.width),cv=document.createElement("canvas");cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);newEv.photo=cv.toDataURL("image/jpeg",.75);drawPrev()};im.onerror=()=>toast("Файлът не е снимка. Опитай с JPG или PNG.");im.src=rd.result};rd.readAsDataURL(f)});
-  $("#fBook").addEventListener("change",e=>{$("#fCap").disabled=!e.target.checked});
+  if(!adm)$("#fBook").addEventListener("change",e=>{$("#fCap").disabled=!e.target.checked});
+  if(adm)$("#fCity").addEventListener("change",e=>{c=CITIES.find(x=>x.id===e.target.value);v.area=c.areas[0][0];$("#fArea").innerHTML=areaOpts();$("#fAreaL").textContent=`Квартал (${c.name})`});
   $("#evForm").addEventListener("submit",ev=>{
     ev.preventDefault();
     const err=m=>{const p=$("#fErr");p.textContent=m;p.hidden=false};
@@ -1246,20 +1260,26 @@ function openEventForm(editId){
     const a=c.areas[+$("#fArea").value];
     const[y,mo,da]=$("#fDate").value.split("-").map(Number),[hh,mm]=$("#fTime").value.split(":").map(Number),start=new Date(y,mo-1,da,hh,mm);
     if(start.getTime()<Date.now()-36e5&&(!ex||start.getTime()!==new Date(ex.start).getTime()))return err("Датата е в миналото. Избери бъдещ ден и час.");
-    const book=$("#fBook").checked,cap=book?Math.max(1,+$("#fCap").value||10):null;
+    let extOrg=null,extUrl=null;
+    if(adm){extOrg=$("#fOrg").value.trim();extUrl=$("#fExt").value.trim();
+      if(!extOrg)return err("Въведи името на организатора.");
+      if(extUrl&&!/^https?:\/\//i.test(extUrl))extUrl="https://"+extUrl;
+      if(extUrl&&!/^https?:\/\/[^\s.]+\.[^\s]+$/i.test(extUrl))return err("Линкът не изглежда правилен. Копирай го от адресната лента на сайта.")}
+    const book=adm?false:$("#fBook").checked,cap=book?Math.max(1,+$("#fCap").value||10):null;
     if(ex&&book&&cap<booked)return err(`Вече има ${booked} записани. Местата не може да са по-малко от тях.`);
     if(ex&&!book&&booked)return err(`Има ${booked} записани. Остави резервациите включени или първо ги уведоми.`);
     if(title.length<3)return err("Заглавието трябва да е поне 3 знака.");
     const f={title,age:$("#fCat").value,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};
-    if(!ex||a[0]!==ex.area){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
+    if(adm)Object.assign(f,{ext_org:extOrg,ext_url:extUrl||null,city_id:c.id});
+    if(!ex||a[0]!==ex.area||c.id!==ex.city){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
     const btn=ev.target.querySelector("button[type=submit]");btn.disabled=true;
     act(async()=>{
       f.photo_url=newEv.photo?await uploadImage(newEv.photo,"events"):null;
       if(ex)await q(sb.from("events").update(f).eq("id",ex.id));
-      else await q(sb.from("events").insert(Object.assign({organizer_id:LIVE.me.id,city_id:c.id},f)));
+      else await q(sb.from("events").insert(Object.assign({organizer_id:LIVE.me.id,city_id:c.id},adm?{mod_status:"approved"}:{},f)));
     },{reload:["events"]}).then(r=>{btn.disabled=false;if(!r)return;closeSheet();renderAll();
       if(ex)toast(booked?`Промените са запазени. Записаните (${booked}) получиха известие.`:"Промените са запазени");
-      else{confetti(innerWidth/2,innerHeight/3);toast("Изпратено за одобрение. Ще се появи в приложението, щом администратор го одобри.")}});
+      else{confetti(innerWidth/2,innerHeight/3);toast(adm?"Публикувано. Вече се вижда в приложението.":"Изпратено за одобрение. Ще се появи в приложението, щом администратор го одобри.")}});
   });
 }
 
@@ -1409,8 +1429,9 @@ document.addEventListener("click",ev=>{
   if(ds.share){const e=findEv(ds.share),d=new Date(e.start),txt=`${e.title} · ${whenShort(d)} · ${e.venue}, ${cityName(e.city)} · ${price(e.price)}`;
     try{navigator.clipboard.writeText(txt).then(()=>toast("Копирано. Постави го в съобщение."),()=>toast(txt))}catch(_){toast(txt)}return}
   // организатор
-  if(ds.newev!==undefined){if(need("newEv",null,"Влез като организатор, за да публикуваш."))return;if(S.role!=="org"){toast("Публикуването е за профили на организатори.");return}openEventForm();return}
+  if(ds.newev!==undefined){if(need("newEv",null,"Влез като организатор, за да публикуваш."))return;if(S.role!=="org"&&!isAdmin()){toast("Публикуването е за профили на организатори.");return}openEventForm();return}
   if(ds.edit){openEventForm(ds.edit);return}
+  if(ds.dup){openEventForm(null,ds.dup);return}
   if(ds.att){if(S.role!=="org"&&S.role!=="admin")return;const bid=ds.att,v=ds.v,eid=Object.keys(LIVE.attendees).find(k=>LIVE.attendees[k].some(a=>a.id===bid));
     act(async()=>{await q(sb.from("bookings").update({status:v}).eq("id",bid));if(eid)await LOAD.attendees(eid);if(S.role==="org")await LOAD.myFees()},{ok:v==="attended"?(curFee()?`Отбелязано: дойде (+${curFee()} € такса)`:"Отбелязано: дойде"):"Отбелязано: не дойде"});return}
   if(ds.cancelask){const b=$("#ca-"+ds.cancelask);if(b)b.hidden=false;return}
