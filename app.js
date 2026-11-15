@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115170218";
+const JOYLI_BUILD="20261115172124";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1002,11 +1002,15 @@ const ERR_BG=[
   [/Password should be at least/i,"Паролата е твърде кратка."],
   [/rate limit|too many/i,"Твърде много опити. Изчакай малко и опитай пак."],
   [/Failed to fetch|NetworkError|network/i,"Няма връзка с интернет. Провери връзката и опитай пак."],
-  [/JWT|session/i,"Сесията изтече. Влез отново."]
+  [/JWT|session/i,"Сесията изтече. Влез отново."],
+  [/ext_url|ext_org|schema cache/i,"Базата не е обновена. Пусни обновлението от стъпка 4 в „Joyli SQL“ и опитай пак."],
+  [/Bucket not found/i,"Липсва хранилището за снимки в Supabase."],
+  [/row-level security/i,"Нямаш права за това действие."],
+  [/payload too large|exceeded the maximum/i,"Снимката е твърде голяма."]
 ];
 function bgErr(e){const m=(e&&(e.message||e.error_description||e.msg))||String(e||"");for(const[re,t]of ERR_BG)if(re.test(m))return t;
   // съобщенията от базата вече са на български (raise exception)
-  if(/[А-Яа-я]/.test(m))return m.replace(/^.*?:\s*/,"").trim();return "Нещо се обърка. Опитай пак след малко."}
+  if(/[А-Яа-я]/.test(m))return m.replace(/^.*?:\s*/,"").trim();return "Нещо се обърка. Опитай пак след малко."+(m?" ("+m.slice(0,90)+")":"")}
 async function q(p){const{data,error}=await p;if(error)throw error;return data}
 let busyN=0;
 function busy(on){busyN+=on?1:-1;document.body.classList.toggle("busy",busyN>0)}
