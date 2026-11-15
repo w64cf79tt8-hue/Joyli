@@ -1,4 +1,5 @@
 "use strict";
+const JOYLI_BUILD="20261115170218";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1093,6 +1094,25 @@ document.addEventListener("click",e=>{
   if(e.target.closest("[data-install]")&&deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.finally(()=>{deferredPrompt=null;renderTab()})}
 });
 if("serviceWorker" in navigator&&location.protocol==="https:")addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+/* ---------- автоматично обновяване ----------
+   При всяко връщане към приложението (и на всеки 5 минути) проверява дали има нова версия.
+   Ако има, презарежда сама, освен ако човекът попълва формуляр в момента. */
+let updPending=false;
+async function checkUpdate(){
+  if(typeof JOYLI_BUILD==="undefined"||location.protocol!=="https:")return;
+  try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
+    const v=(await r.text()).trim();if(v&&v!==JOYLI_BUILD){updPending=true;applyUpdate()}}catch(e){}
+}
+function applyUpdate(){
+  if(!updPending)return;
+  const typing=$("#sheetRoot")&&$("#sheetRoot").querySelector("form,textarea");
+  if(typing&&document.visibilityState==="visible")return; // изчакваме да затвори формуляра
+  try{navigator.serviceWorker&&navigator.serviceWorker.getRegistration().then(g=>g&&g.update())}catch(e){}
+  location.reload();
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate();else applyUpdate()});
+setInterval(()=>{checkUpdate();applyUpdate()},5*60*1000);
+addEventListener("load",()=>setTimeout(checkUpdate,3000));
 
 /* ================= КАРТА: местене, мащаб, избор на пин ================= */
 const MV={};let mapDragged=false;
