@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115182135";
+const JOYLI_BUILD="20261115193558";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -226,10 +226,16 @@ function nextOcc(s,dur,weekly){if(!weekly)return s;const d=new Date(s),now=Date.
 const WEVERY=["всяка неделя","всеки понеделник","всеки вторник","всяка сряда","всеки четвъртък","всеки петък","всяка събота"];
 // резервацията важи за текущата дата на събитието
 const curBk=b=>{const e=findEv(b.event_id);return!e||!e.repeat||!b.occurs_at||Math.abs(Date.parse(b.occurs_at)-Date.parse(e.start))<12*36e5};
+// свободна възраст: събитие „4 – 10 г.“ се показва във всички групи, които застъпва
+const AGE_R={k03:[0,3],k37:[3,7],k710:[7,10],k1012:[10,12],k1218:[12,18],ad:[18,99]};
+const agesFor=(a,b)=>{const hi=Math.max(b,a+1);return CATS.map(c=>c.key).filter(k=>a<AGE_R[k][1]&&hi>AGE_R[k][0])};
+const ageLabel=(a,b)=>b>=99?(a>=18?"18+":`от ${a} г.`):a===b?`${a} г.`:`${a} – ${b} г.`;
+const evAges=e=>e.cats&&e.cats.length?e.cats:[e.cat];
 const isExt=id=>String(id||"").startsWith("ext:");
 const extKey=n=>"ext:"+String(n).trim().toLowerCase().replace(/\s+/g," ");
 function mapEv(r){const xo=r.ext_org&&r.ext_org.trim()?extKey(r.ext_org):null;if(xo&&!ORGS[xo])ORGS[xo]=orgEntry(xo,r.ext_org.trim());
-  return{id:r.id,city:r.city_id,cat:r.age,type:r.type,title:r.title,org:xo||r.organizer_id,owner:r.organizer_id,ext:r.ext_url||null,extOrg:r.ext_org||null,repeat:!!r.repeat_weekly,start0:r.starts_at,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
+  const amin=r.age_min!=null?+r.age_min:(AGE_R[r.age]||[0,99])[0],amax=r.age_max!=null?+r.age_max:(AGE_R[r.age]||[0,99])[1],cats=agesFor(amin,amax);
+  return{id:r.id,city:r.city_id,cat:r.age,amin,amax,cats:cats.length?cats:[r.age],ageL:ageLabel(amin,amax),type:r.type,title:r.title,org:xo||r.organizer_id,owner:r.organizer_id,ext:r.ext_url||null,extOrg:r.ext_org||null,repeat:!!r.repeat_weekly,start0:r.starts_at,desc:r.description||"",price:+r.price_eur||0,booking:r.booking,dur:r.duration_min,icon:r.icon||"star",photo:r.photo_url||null,
   venue:r.venue||(ORGS[xo||r.organizer_id]?.name)||"",address:r.address||"",area:r.area,lat:+r.lat,lng:+r.lng,start:nextOcc(r.starts_at,r.duration_min,r.repeat_weekly),cap:r.capacity,mod:r.mod_status,modNote:r.mod_note,cancelled:r.cancelled,
   updatedAt:r.updated_at?Date.parse(r.updated_at):null,createdAt:Date.parse(r.created_at),reviews:[],pop:0,sampleAtt:[]}}
 
@@ -264,12 +270,12 @@ function nearestArea(p){let best=city().areas[0],bd=1e9;city().areas.forEach(a=>
 function weekendDays(){const d=today.getDay();if(d===6)return[0,1];if(d===0)return[0];return[6-d,7-d]}
 const upcoming=e=>new Date(e.start).getTime()+e.dur*6e4>=Date.now();
 function interestAges(){const I=S.interests;if(!I)return[];if(I.ages.length)return I.ages;return I.picks.includes("kids")?KID_AGES:[]}
-function matchesInterests(e){const I=S.interests;if(!I)return true;const ages=interestAges(),types=I.picks.filter(k=>k!=="kids");return(!ages.length||ages.includes(e.cat))&&(!types.length||types.includes(e.type))}
+function matchesInterests(e){const I=S.interests;if(!I)return true;const ages=interestAges(),types=I.picks.filter(k=>k!=="kids");return(!ages.length||evAges(e).some(k=>ages.includes(k)))&&(!types.length||types.includes(e.type))}
 function filterEvents(F){
   const p=userPos(),we=weekendDays(),q=(F.q||"").trim().toLowerCase();
   const l=liveEvents().filter(e=>{
     if(e.city!==S.city||!upcoming(e))return false;
-    if(F.ages.length&&!F.ages.includes(e.cat))return false;
+    if(F.ages.length&&!evAges(e).some(k=>F.ages.includes(k)))return false;
     if(F.types.length&&!F.types.includes(e.type))return false;
     const x=dayDiff(e.start);
     if(F.when==="today"&&x!==0)return false;
@@ -337,7 +343,7 @@ const isFav=id=>S.favs.includes(id);
 const heartBtn=(e,cls="heart")=>{const on=isFav(e.id);return `<button type="button" class="${cls}${on?" on":""}" data-fav="${e.id}" aria-pressed="${on}" aria-label="${on?"Премахни от запазени":"Запази"}">${on?uiFill("heart"):ui("heart")}</button>`};
 function rowHTML(e,i=0){
   const mine=S.bookings.includes(e.id);
-  return `<article class="row" style="--i:${Math.min(i,12)}"><button type="button" class="open" data-open="${e.id}"><div class="thumb">${eventArt(e,{small:true})}</div>
+  return `<article class="row" style="--i:${Math.min(i,12)}"><button type="button" class="open" data-open="${e.id}"><div class="thumb">${eventArt(e,{small:true})}<span class="agepill${evAges(e).length>1?" multi":""}">${e.ageL||catOf(e.cat).short}</span></div>
    <div class="rb"><b>${esc(e.title)}</b>
    <span class="ri">${ui("cal")}<span>${whenShort(new Date(e.start))}</span></span>
    <span class="ri">${ui("pin")}<span>${esc(e.venue)}</span></span>
@@ -391,7 +397,7 @@ function renderHome(){
     </div>
     ${installTip()}
     <div class="sec"><h2>${S.interests?"Препоръчани за теб":"Предстоящи в "+esc(city().name)}</h2><button type="button" data-quick="fy">Виж всички</button></div>
-    ${fy.length?`<div class="hcards">${fy.map((e,i)=>`<article class="hcard" style="--i:${i}"><button type="button" class="open" data-open="${e.id}"><div class="ph">${eventArt(e)}<span class="agepill">${catOf(e.cat).short}</span></div><div class="hb"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(new Date(e.start))}</span></span><span class="ri">${ui("nav")}<span>${fmtKm(e._d)} · ${esc(e.area)}</span></span></div></button>${heartBtn(e)}</article>`).join("")}</div>`:emptyBox("Няма предстоящи събития по твоите интереси в този град.",`<button type="button" class="btn ghost sm" data-interests>Промени интересите</button>`)}
+    ${fy.length?`<div class="hcards">${fy.map((e,i)=>`<article class="hcard" style="--i:${i}"><button type="button" class="open" data-open="${e.id}"><div class="ph">${eventArt(e)}<span class="agepill${evAges(e).length>1?" multi":""}">${e.ageL||catOf(e.cat).short}</span></div><div class="hb"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(new Date(e.start))}</span></span><span class="ri">${ui("nav")}<span>${fmtKm(e._d)} · ${esc(e.area)}</span></span></div></button>${heartBtn(e)}</article>`).join("")}</div>`:emptyBox("Няма предстоящи събития по твоите интереси в този град.",`<button type="button" class="btn ghost sm" data-interests>Промени интересите</button>`)}
     <div class="sec"><h2>Днес и утре около теб</h2><button type="button" data-tab="map">На картата</button></div>
     <div class="rows">${soon.length?soon.map(rowHTML).join(""):emptyBox(`Няма събития до ${S.radius} км за днес и утре.`,`<button type="button" class="btn ghost sm" data-quick="all">Виж целия град</button>`)}</div>
     ${S.interests?"":`<div class="panel" style="margin-top:18px"><b>Кажи ни какво обичате</b><span class="hint">Ще подредим събитията по твоите интереси всеки път, когато отвориш приложението.</span><button type="button" class="btn" data-interests>Избери интереси</button></div>`}
@@ -527,7 +533,7 @@ function eventHTML(id){
   return `<div class="ev-hero">${eventArt(e,{small:true})}<div class="cbtns"><button type="button" class="cbtn" data-back aria-label="Назад">${ui("back")}</button><span class="sp"></span><button type="button" class="cbtn" data-share="${e.id}" aria-label="Сподели">${ui("share")}</button>${heartBtn(e,"cbtn")}</div></div>
   <div class="ev-card px">
     <h1>${esc(e.title)}</h1>
-    <div class="chips"><span class="chip-a">${catOf(e.cat).label}</span><span class="chip-t">${typeOf(e.type).label}</span>${e.cancelled?`<span class="tg warn">Отменено</span>`:""}</div>
+    <div class="chips"><span class="chip-a${evAges(e).length>1?" multi":""}">${e.ageL||catOf(e.cat).label}</span><span class="chip-t">${typeOf(e.type).label}</span>${e.cancelled?`<span class="tg warn">Отменено</span>`:""}</div>
     ${e.updatedAt&&mine&&!e.cancelled?`<p class="hint"><span class="tg">Обновено</span> Организаторът промени детайлите. Провери часа и мястото.</p>`:""}
     <div class="info">
       <div>${ui("cal")}<span>${longDate(d)}${e.repeat?`<small>Повтаря се ${WEVERY[d.getDay()]}</small>`:""}</span></div>
@@ -614,7 +620,7 @@ function dashHTML(){
     ${freeNow()?`<div class="pendban" style="margin:0;background:color-mix(in srgb,var(--ok) 12%,var(--surface));border-color:color-mix(in srgb,var(--ok) 35%,var(--line))">${ui("check")}<span><b>Без такси до ${freeDate()}</b><br>${feeNote()}</span></div>`:`<p class="hint">${feeNote()}</p>`}
     <button type="button" class="btn block" data-newev>${ui("plus")} Публикувай събитие</button></div>
    ${evs.map(e=>{const d=new Date(e.start),at=attendees(e);return `<div class="dash"><div class="th">${eventArt(e,{small:true})}</div>
-    <div style="min-width:0;display:grid;gap:4px"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(d)} · ${esc(e.area)}</span></span><span>${e.mod==="pending"?`<span class="tg pend">Чака одобрение</span>`:""}${e.mod==="rejected"?`<span class="tg warn">Отказано</span>`:""}${e.mod==="hidden"?`<span class="tg warn">Скрито от администратор</span>`:""}${e.cancelled?`<span class="tg warn">Отменено</span>`:""}${e.updatedAt?`<span class="tg">Редактирано</span>`:""}<span class="tg">${catOf(e.cat).short}</span></span>${e.mod==="rejected"&&e.modNote?`<span class="hint">Причина: ${esc(e.modNote)}</span>`:""}</div>
+    <div style="min-width:0;display:grid;gap:4px"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(d)} · ${esc(e.area)}</span></span><span>${e.mod==="pending"?`<span class="tg pend">Чака одобрение</span>`:""}${e.mod==="rejected"?`<span class="tg warn">Отказано</span>`:""}${e.mod==="hidden"?`<span class="tg warn">Скрито от администратор</span>`:""}${e.cancelled?`<span class="tg warn">Отменено</span>`:""}${e.updatedAt?`<span class="tg">Редактирано</span>`:""}<span class="tg">${e.ageL||catOf(e.cat).short}</span></span>${e.mod==="rejected"&&e.modNote?`<span class="hint">Причина: ${esc(e.modNote)}</span>`:""}</div>
     <div class="full btnrow"><button type="button" class="btn ghost sm" data-open="${e.id}">Виж</button><button type="button" class="btn ghost sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${e.cancelled?`<button type="button" class="btn ghost sm" data-restore="${e.id}">Възстанови</button>`:`<button type="button" class="btn ghost sm" data-cancelask="${e.id}">Отмени</button>`}</div>
     <div class="full box" id="ca-${e.id}" hidden><span class="hint">Сигурен ли си? Събитието изчезва от търсенето, а записаните ще видят, че е отменено.</span><div class="btnrow"><button type="button" class="btn sm" data-cancel="${e.id}">Да, отмени</button><button type="button" class="btn ghost sm" data-cancelno="${e.id}">Не</button></div></div>
     <div class="full">${e.cancelled?"":e.booking?(at.length?at.map(a=>`<div class="att"><span>${e.repeat&&a.when?whenShort(new Date(a.when))+" · ":""}${esc(a.name)} · <b class="code">${a.code}</b> · <span class="st ${a.st}">${a.st==="attended"?(feeFor(a)?"дойде · "+feeFor(a)+" €":"дойде"):a.st==="no_show"?"не дойде":"очаква се"}</span></span><span style="display:flex;gap:6px"><button type="button" class="btn sm" data-att="${a.id}" data-v="attended">Дойде</button><button type="button" class="btn ghost sm" data-att="${a.id}" data-v="no_show">Не дойде</button></span></div>`).join(""):`<p class="hint">Още няма резервации.</p>`):`<p class="hint">Свободен вход, без резервации и без такса.</p>`}</div></div>`}).join("")||emptyBox(`Нямаш събития в ${esc(city().name)}. Публикувай първото.`)}
@@ -1009,7 +1015,7 @@ const ERR_BG=[
   [/rate limit|too many/i,"Твърде много опити. Изчакай малко и опитай пак."],
   [/Failed to fetch|NetworkError|network/i,"Няма връзка с интернет. Провери връзката и опитай пак."],
   [/JWT|session/i,"Сесията изтече. Влез отново."],
-  [/ext_url|ext_org|repeat_weekly|occurs_at|schema cache/i,"Базата не е обновена. Пусни обновленията (стъпки 4 и 5) от „Joyli SQL“ и опитай пак."],
+  [/ext_url|ext_org|repeat_weekly|occurs_at|age_min|age_max|schema cache/i,"Базата не е обновена. Пусни обновленията (стъпки 4, 5 и 6) от „Joyli SQL“ и опитай пак."],
   [/Bucket not found/i,"Липсва хранилището за снимки в Supabase."],
   [/row-level security/i,"Нямаш права за това действие."],
   [/payload too large|exceeded the maximum/i,"Снимката е твърде голяма."]
@@ -1342,7 +1348,7 @@ function openEventForm(editId,dupId){
   let c=src?CITIES.find(x=>x.id===src.city):city();
   newEv={icon:src?src.icon:"paint",photo:src?src.photo||null:null,pt:src&&isFinite(src.lat)?{lat:src.lat,lng:src.lng}:null,moved:!ex&&!!src,exact:!!src};
   const sd=src?new Date(src.start):new Date(today.getTime()+864e5+10.5*36e5);
-  const v=src?{...src}:{title:"",cat:"k37",type:"workshop",area:c.areas[0][0],address:"",price:0,dur:60,cap:20,booking:!adm,desc:""};
+  const v=src?{...src}:{title:"",cat:"k37",amin:3,amax:7,type:"workshop",area:c.areas[0][0],address:"",price:0,dur:60,cap:20,booking:!adm,desc:""};
   const booked=ex?bookedCount(ex):0;
   const areaOpts=()=>c.areas.map((a,i)=>`<option value="${i}"${a[0]===v.area?" selected":""}>${esc(a[0])}</option>`).join("");
   openSheet(`${sheetHead(ex?"Редакция на събитие":dupId?"Копие на събитие":"Ново събитие",ex&&booked?booked+" души са запазили място. Ще видят, че събитието е обновено.":ex?"":adm?"Публикува се веднага, без одобрение.":"Публикуването е безплатно.")}
@@ -1352,7 +1358,9 @@ function openEventForm(editId,dupId){
     <p class="hint" style="margin:-4px 0 0">Посетителите ще отиват на този линк, за да запазят място. Остави празно при свободен вход.</p>
     <label class="field">Град<select id="fCity">${CITIES.map(x=>`<option value="${x.id}"${x.id===c.id?" selected":""}>${esc(x.name)}</option>`).join("")}</select></label>`:""}
     <label>Заглавие<input type="text" id="fTitle" maxlength="80" value="${esc(v.title)}" placeholder="напр. Куклен театър „Пинокио“"></label>
-    <div class="row2"><label class="field">Възраст<select id="fCat">${CATS.map(k=>`<option value="${k.key}"${k.key===v.cat?" selected":""}>${k.label} · ${k.sub}</option>`).join("")}</select></label><label class="field">Вид<select id="fType">${TYPES.map(t=>`<option value="${t.key}"${t.key===v.type?" selected":""}>${t.label}</option>`).join("")}</select></label></div>
+    <div class="row2"><label>Възраст от (г.)<input type="number" id="fAmin" inputmode="numeric" min="0" max="98" value="${v.amin??(AGE_R[v.cat]||[3])[0]}"></label><label>до (г.)<input type="number" id="fAmax" inputmode="numeric" min="0" max="99" value="${(v.amax??(AGE_R[v.cat]||[0,7])[1])>=99?"":(v.amax??(AGE_R[v.cat]||[0,7])[1])}" placeholder="без граница"></label></div>
+    <p class="hint" id="fAgeHint" style="margin:-4px 0 0"></p>
+    <div class="row2"><label class="field">Вид<select id="fType">${TYPES.map(t=>`<option value="${t.key}"${t.key===v.type?" selected":""}>${t.label}</option>`).join("")}</select></label></div>
     <div><span class="hint" style="font-weight:700">Корица</span>
       <div class="upl" style="margin-top:6px"><div class="prev" id="fPrev"></div><label class="btn ghost sm" style="cursor:pointer">Качи снимка<input type="file" id="fPhoto" accept="image/*" hidden></label><button type="button" class="btn ghost sm" id="fNoPhoto" hidden>Махни снимката</button></div>
       <div class="icopick" id="icoPick" style="margin-top:8px"></div></div>
@@ -1373,6 +1381,10 @@ function openEventForm(editId,dupId){
     $("#icoPick").innerHTML=ART_KEYS.map(k=>`<button type="button" data-ico="${k}" class="${!newEv.photo&&newEv.icon===k?"on":""}" aria-label="Илюстрация ${k}">${cover("pick"+k,t,k,{small:true})}</button>`).join("");$("#fNoPhoto").hidden=!newEv.photo};
   drawPrev();
   $("#fType").addEventListener("change",drawPrev);
+  const ageRead=()=>{const a=parseInt($("#fAmin").value,10),bv=$("#fAmax").value.trim(),b=bv===""?99:parseInt(bv,10);return{a,b,ok:Number.isInteger(a)&&Number.isInteger(b)&&a>=0&&a<=98&&b>=a&&b<=99}};
+  const ageHint=()=>{const r=ageRead(),h=$("#fAgeHint");if(!r.ok){h.textContent="Въведи възраст от–до в години. За възрастни: от 18, „до“ остави празно.";return}
+    const ks=agesFor(r.a,r.b);h.textContent=`Етикет „${ageLabel(r.a,r.b)}“ · ще се вижда в ${ks.length>1?"групите":"групата"}: ${ks.map(k=>catOf(k).short).join(", ")}`};
+  ["#fAmin","#fAmax"].forEach(s=>$(s).addEventListener("input",ageHint));ageHint();
   $("#fDate").addEventListener("change",e=>{const p=e.target.value.split("-").map(Number);if(p.length===3)$("#fRepL").textContent="Повтаря се "+WEVERY[new Date(p[0],p[1]-1,p[2]).getDay()]});
   $("#icoPick").addEventListener("click",ev=>{const b=ev.target.closest("[data-ico]");if(!b)return;ev.stopPropagation();newEv.icon=b.dataset.ico;newEv.photo=null;drawPrev()});
   $("#fNoPhoto").addEventListener("click",ev=>{ev.stopPropagation();newEv.photo=null;drawPrev()});
@@ -1394,6 +1406,7 @@ function openEventForm(editId,dupId){
     ev.preventDefault();
     const err=m=>{const p=$("#fErr");p.textContent=m;p.hidden=false};
     const title=$("#fTitle").value.trim();if(!title)return err("Въведи заглавие на събитието.");
+    const ag=ageRead();if(!ag.ok)return err("Провери възрастта: „от“ трябва да е между 0 и 98, а „до“ да е по-голямо или празно.");
     if(!$("#fDate").value||!$("#fTime").value)return err("Избери дата и час.");
     if($("#fAddr").value.trim()&&!newEv.exact){const sb2=ev.target.querySelector("button[type=submit]");sb2.disabled=true;const g=await findAddr();sb2.disabled=false;
       if(g===null)return err("Не открихме адреса на картата. Провери улицата и номера"+(hasL()?" или докосни картата, за да посочиш мястото.":"."))}
@@ -1409,7 +1422,7 @@ function openEventForm(editId,dupId){
     if(ex&&book&&cap<booked)return err(`Вече има ${booked} записани. Местата не може да са по-малко от тях.`);
     if(ex&&!book&&booked)return err(`Има ${booked} записани. Остави резервациите включени или първо ги уведоми.`);
     if(title.length<3)return err("Заглавието трябва да е поне 3 знака.");
-    const f={title,age:$("#fCat").value,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};if($("#fRep").checked)f.repeat_weekly=true;else if(ex&&ex.repeat)f.repeat_weekly=false;
+    const f={title,age:agesFor(ag.a,ag.b)[0],age_min:ag.a,age_max:ag.b,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};if($("#fRep").checked)f.repeat_weekly=true;else if(ex&&ex.repeat)f.repeat_weekly=false;
     if(adm)Object.assign(f,{ext_org:extOrg,ext_url:extUrl||null,city_id:c.id});
     if(newEv.moved&&newEv.pt)Object.assign(f,{area:a[0],lat:newEv.pt.lat,lng:newEv.pt.lng});
     else if(!ex||a[0]!==ex.area||c.id!==ex.city){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
