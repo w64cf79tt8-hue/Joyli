@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115174616";
+const JOYLI_BUILD="20261115175637";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1179,8 +1179,8 @@ addEventListener("resize",()=>{if(S.tab==="map"&&!S.screens.length)mapInit()});
    Ако библиотеката не се зареди (няма интернет до CDN), остава старата схематична карта. */
 const hasL=()=>typeof window.L!=="undefined"&&!!window.L.map;
 const isDark=()=>{const t=document.documentElement.dataset.theme;return t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches)};
-function tiles(){return L.tileLayer(`https://{s}.basemaps.cartocdn.com/rastertiles/${isDark()?"dark_all":"voyager"}/{z}/{x}/{y}{r}.png`,
-  {subdomains:"abcd",maxZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'})}
+function tiles(){const t=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom:19,className:isDark()?"tiles-dark":"",attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'});return t}
 const cityCenter=c=>{const la=c.areas.map(a=>a[1]),ln=c.areas.map(a=>a[2]);return[(Math.min(...la)+Math.max(...la))/2,(Math.min(...ln)+Math.max(...ln))/2]};
 const areaIdx=(c,lat,lng)=>{let bi=0,bd=1e9;c.areas.forEach((a,i)=>{const d=dist(lat,lng,a[1],a[2]);if(d<bd){bd=d;bi=i}});return bi};
 function pinIcon(e,sel){return L.divIcon({className:"lpin"+(sel?" sel":""),iconSize:[34,46],iconAnchor:[17,45],
