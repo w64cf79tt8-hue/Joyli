@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261115193558";
+const JOYLI_BUILD="20261116132058";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -352,6 +352,13 @@ function rowHTML(e,i=0){
    </div></button>${heartBtn(e)}</article>`;
 }
 function emptyArt(){return `<svg class="art" viewBox="0 0 120 80" aria-hidden="true"><ellipse cx="60" cy="72" rx="40" ry="5" fill="currentColor" opacity=".12"/><g class="ico"><path d="M60 10a18 18 0 0 0-18 18c0 14 18 34 18 34s18-20 18-34a18 18 0 0 0-18-18z" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="60" cy="28" r="6" fill="currentColor" opacity=".5"/></g></svg>`}
+// „Това ваше събитие ли е?“ — под обявите, добавени от админа
+const myClaim=e=>(LIVE.claims||[]).find(c=>c.status==="pending"&&LIVE.me&&c.user_id===LIVE.me.id&&String(c.ext_org).trim().toLowerCase()===String(e.extOrg||"").trim().toLowerCase());
+function claimBox(e){const c=myClaim(e);
+  return `<div class="box claimbox"><b style="font-size:15px">${ui("user")} За организаторите</b>
+   ${c?`<p class="hint" style="margin:0">Заявката ти за „${esc(e.extOrg)}“ се преглежда. Ще получиш известие, щом я потвърдим.</p>`:
+   `<p class="hint" style="margin:0">Организирате това събитие? Поемете управлението на профила си в Joyli и публикувайте следващите си събития безплатно.</p>
+   <button type="button" class="btn block" data-claim="${e.id}">Това е мое събитие</button>`}</div>`}
 const emptyBox=(txt,btns="")=>`<div class="empty">${emptyArt()}<span>${txt}</span>${btns}</div>`;
 const loginBtns=`<div class="btnrow" style="width:100%"><button type="button" class="btn" data-auth="login">Вход</button><button type="button" class="btn ghost" data-auth="register">Регистрация</button></div>`;
 
@@ -546,6 +553,7 @@ function eventHTML(id){
     ${isAdmin()?`<div class="box"><b style="font-size:14px">Админ · <span class="tg ${MODL[modOf(e)][1]}">${MODL[modOf(e)][0]}</span></b><div class="btnrow"><button type="button" class="btn sm" data-edit="${e.id}">${ui("edit")} Редактирай</button><button type="button" class="btn ghost sm" data-dup="${e.id}">Копирай</button>${modOf(e)!=="approved"?`<button type="button" class="btn ghost sm" data-mod="approve" data-id="${e.id}">Одобри</button>`:`<button type="button" class="btn ghost sm" data-mod="hide" data-id="${e.id}">Скрий</button>`}</div></div>`:""}
     ${own&&e.mod&&e.mod!=="approved"?`<p class="hint"><span class="tg ${MODL[e.mod][1]}">${MODL[e.mod][0]}</span> ${e.mod==="pending"?"Обявата ще се вижда, след като администратор я одобри.":esc(e.modNote||"")}</p>`:""}
     ${own?`<div class="box"><b style="font-size:14px">Това е твое събитие</b><div class="btnrow"><button type="button" class="btn sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${e.cancelled?`<button type="button" class="btn ghost sm" data-restore="${e.id}">Възстанови</button>`:`<button type="button" class="btn ghost sm" data-screen="dash">Записани и такси</button>`}</div></div>`:""}
+    ${isExt(e.org)&&!isAdmin()?claimBox(e):""}
     <div class="orgrow"><button type="button" class="open" data-orgpage="${e.org}"><div class="ava" style="background:${O.col}">${esc(O.ini)}</div><div style="min-width:0"><b>${esc(O.name)}</b><div class="hint">${orgRs.length?`<span class="stars">★</span> ${dec(avg(orgRs))} · ${orgRs.length} оценки`:"Организатор"}</div></div></button>
       ${isExt(e.org)?"":`<button type="button" class="btn ${fol?"":"line "}sm" data-follow="${e.org}">${fol?"Следваш":"Следвай"}</button>`}</div>
     <div style="display:grid;gap:10px"><div class="sec" style="margin:4px 0 0"><h2>Оценки</h2>${rs.length?`<span><span class="stars">${starStr(avg(rs))}</span> <b>${dec(avg(rs))}</b></span>`:""}</div>
@@ -680,7 +688,8 @@ function userAva(u){const nm=u.name||u.full_name||"?",o=u.role==="org"?ORGS[u.or
 /* ================= АДМИН: ЕКРАНИ ================= */
 function adminHTML(){
   const A=S.adm,pe=pendEvents().length,pu=pendUsers().length,um=unreadAdmin();
-  const tabs=[["overview","Обзор",0],["events","Обяви",pe],["users","Регистрации",pu],["msgs","Съобщения",um],["cast","Известия",0],["content","Съдържание",0]];
+  const pc=(LIVE.claims||[]).filter(c=>c.status==="pending").length;
+  const tabs=[["overview","Обзор",0],["events","Обяви",pe],["users","Регистрации",pu],["claims","Собственост",pc],["msgs","Съобщения",um],["cast","Известия",0],["content","Съдържание",0]];
   const head=`<div class="bar px"><button type="button" class="icon-btn plain" data-back aria-label="Назад">${ui("back")}</button><h1>Админ панел</h1><span></span></div>
    <div class="px"><div class="pills" role="tablist">${tabs.map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${A.tab===k}" class="pill tabp${A.tab===k?" on":""}" data-atab="${k}">${l}${n?` <em class="cnt">${n}</em>`:""}</button>`).join("")}</div></div>`;
   let body="";
@@ -716,6 +725,15 @@ function adminHTML(){
     body=`<div class="agegrid" style="margin-bottom:12px">${fl.map(([k,lb])=>`<button type="button" class="agebtn${A.reg===k?" on":""}" data-areg="${k}">${lb}${k==="pending"&&pendUsers().length?` (${pendUsers().length})`:""}</button>`).join("")}</div>
      <p class="hint" style="margin-bottom:12px">Новите профили могат да разглеждат, но запазват места, оценяват и публикуват едва след одобрение.</p>
      <div class="rows">${l.map(admUserRow).join("")||emptyBox("Няма профили в този списък.")}</div>`;
+  }
+  if(A.tab==="claims"){
+    const cl=(LIVE.claims||[]).slice(0,100);
+    body=`<p class="hint" style="margin-bottom:12px">Организатори, които казват, че обявите, добавени от теб, са техни. Провери данните (обади се, виж имейла или сайта) и потвърди. При потвърждение всичките им обяви минават в техния профил.</p>
+     <div class="rows">${cl.map(c=>{const u=whoIs(c.user_id),n=allEvents().filter(e=>e.extOrg&&e.extOrg.trim().toLowerCase()===c.ext_org.trim().toLowerCase()).length;
+      return `<div class="box"><b>„${esc(c.ext_org)}“</b> <span class="tg ${c.status==="pending"?"warn":c.status==="approved"?"ok":"warn"}">${c.status==="pending"?"Чака":c.status==="approved"?"Потвърдена":"Отказана"}</span>
+       <div class="hint">Заявител: ${esc(u.name||"Организатор")}${u.email?" · "+esc(u.email):""}${u.status==="pending"?" · профилът чака одобрение":""}</div>
+       ${c.status==="pending"?`<div class="hint"><b>Проверка:</b> ${esc(c.contact||"")}</div>${c.note?`<div class="hint"><b>Бележка:</b> ${esc(c.note)}</div>`:""}<div class="hint">Обяви за прехвърляне: ${n}</div>
+       <div class="btnrow"><button type="button" class="btn sm" data-clok="${c.id}">Потвърди и прехвърли</button><button type="button" class="btn ghost sm" data-clno="${c.id}">Откажи</button></div>`:""}</div>`}).join("")||emptyBox("Няма заявки.")}</div>`;
   }
   if(A.tab==="msgs"){
     const l=S.msgs.slice().sort((a,b)=>(b.ua-a.ua)||b.items[b.items.length-1].at-a.items[a.items.length-1].at);
@@ -801,6 +819,7 @@ function adminClick(ds,t,ev){
   if(ds.atab){S.adm.tab=ds.atab;S.adm.rej=null;S.adm.lim=30;renderScreen();$("#scr").scrollTop=0;return true}
   if(ds.aev){S.adm.ev=ds.aev;S.adm.lim=30;renderScreen();return true}
   if(ds.areg){S.adm.reg=ds.areg;renderScreen();return true}
+  if(ds.clok||ds.clno){const ok=!!ds.clok;act(async()=>{const n=await q(sb.rpc("decide_claim",{p_claim:ds.clok||ds.clno,p_ok:ok}));return n},{reload:["claims","events","orgs","admin"]}).then(r=>{if(r!==false)toast(ok?`Потвърдено. Прехвърлени обяви: ${typeof r==="number"?r:0}.`:"Заявката е отказана.")});return true}
   if(ds.amore!==undefined){S.adm.lim+=30;renderScreen();return true}
   if(ds.rejask){S.adm.rej=ds.rejask;renderScreen();setTimeout(()=>{const i=$("#rejWhy");if(i){i.focus();i.select()}},50);return true}
   if(ds.rejno!==undefined){S.adm.rej=null;renderScreen();return true}
@@ -1053,7 +1072,7 @@ const LOAD={
   async reviews(eid){const rows=await q(sb.from("reviews_public").select("rating,comment,created_at,name,mine").eq("event_id",eid).order("created_at"));
     LIVE.reviews[eid]=rows.map(r=>({name:r.name||"Посетител",stars:r.rating,text:r.comment||"",mine:r.mine}))},
   async me(){const{data:{session}}=await sb.auth.getSession();
-    if(!session){LIVE.me=null;LIVE.email=null;S.email=null;LIVE.bookings=[];LIVE.favs=[];LIVE.follows=[];LIVE.myReviews={};LIVE.notifs=[];LIVE.threads=[];return}
+    if(!session){LIVE.claims=[];LIVE.me=null;LIVE.email=null;S.email=null;LIVE.bookings=[];LIVE.favs=[];LIVE.follows=[];LIVE.myReviews={};LIVE.notifs=[];LIVE.threads=[];return}
     const uid=session.user.id;LIVE.email=S.email=session.user.email;
     const p=await q(sb.from("profiles").select("*").eq("id",uid).maybeSingle());LIVE.me=p;if(!p)return;
     const[bk,fv,fl,rv]=await Promise.all([
@@ -1067,6 +1086,7 @@ const LOAD={
     const missing=[...new Set(bk.map(b=>b.event_id))].filter(id=>!findEv(id));
     if(missing.length){const rows=await q(sb.from("events").select("*").in("id",missing));LIVE.events=LIVE.events.concat(rows.map(mapEv))}
     await Promise.all([LOAD.notifs(),LOAD.threads()]);
+    await LOAD.claims();
     if(p.role==="org")await LOAD.myFees();
     if(p.role==="admin")await LOAD.admin()},
   async notifs(){if(!LIVE.me)return;LIVE.notifs=await q(sb.from("notifications").select("*").eq("user_id",LIVE.me.id).order("created_at",{ascending:false}).limit(100))},
@@ -1076,6 +1096,9 @@ const LOAD={
     const ms=ids.length?await q(sb.from("messages").select("id,thread_id,from_admin,body,created_at").in("thread_id",ids).order("created_at")):[];
     LIVE.threads=ts.map(t=>({id:t.id,from:t.user_id,subject:t.subject,status:t.status,ua:t.unread_admin,uu:t.unread_user,
       items:ms.filter(m=>m.thread_id===t.id).map(m=>({by:m.from_admin?"admin":"user",text:m.body,at:Date.parse(m.created_at)}))})).filter(t=>t.items.length)},
+  async claims(){LIVE.claims=[];if(!LIVE.me||LIVE.me.role==="user")return;
+    let cq=sb.from("claims").select("*").order("created_at",{ascending:false}).limit(200);if(LIVE.me.role!=="admin")cq=cq.eq("user_id",LIVE.me.id);
+    try{LIVE.claims=await q(cq)}catch(e){LIVE.claims=[]}},
   async myFees(){const rows=await q(sb.from("organizer_fees").select("attendees,total_eur").eq("organizer_id",LIVE.me.id));LIVE.myFees=rows.reduce((s,r)=>s+(+r.total_eur||0),0)},
   async attendees(eid){const rows=await q(sb.rpc("event_attendees",{p_event:eid}));LIVE.attendees[eid]=rows.map(r=>({id:r.booking_id,name:r.name||"Посетител",code:r.code,st:r.status,when:r.occurs_at||null}))},
   async admin(){const[us,tot,cs]=await Promise.all([q(sb.rpc("admin_users")),q(sb.rpc("admin_totals")),q(sb.from("broadcasts").select("*").order("created_at",{ascending:false}).limit(50))]);
@@ -1371,6 +1394,7 @@ function openEventForm(editId,dupId){
     <div class="row2"><label>Дата<input type="date" id="fDate" value="${ymd(sd)}"></label><label>Час<input type="time" id="fTime" value="${hm(sd)}"></label></div>
     <label class="check"><input type="checkbox" id="fRep"${v.repeat?" checked":""}> <span id="fRepL">Повтаря се ${WEVERY[sd.getDay()]}</span></label>
     <div class="row2"><label>Цена (€)<input type="number" id="fPrice" min="0" step="1" value="${v.price}"></label><label>Продължителност (мин)<input type="number" id="fDur" min="15" step="15" value="${v.dur}"></label></div>
+    ${!adm&&ex&&ex.ext?`<div class="box" style="margin:0"><p class="hint" style="margin:0 0 6px">Сега записването е през линк: ${esc(ex.ext)}</p><label class="check"><input type="checkbox" id="fNoExt"> Махни линка и приемай записвания в Joyli</label></div>`:""}
     ${adm?"":`<label class="check"><input type="checkbox" id="fBook"${v.booking?" checked":""}> Позволи запазване на място</label>
     <label>Брой места<input type="number" id="fCap" min="1" value="${v.cap||12}"${v.booking?"":" disabled"}></label>`}
     <label>Описание<textarea id="fDesc" maxlength="600" placeholder="Какво ще правят, какво да вземат, за кого е подходящо.">${esc(v.desc)}</textarea></label>
@@ -1424,6 +1448,7 @@ function openEventForm(editId,dupId){
     if(title.length<3)return err("Заглавието трябва да е поне 3 знака.");
     const f={title,age:agesFor(ag.a,ag.b)[0],age_min:ag.a,age_max:ag.b,type:$("#fType").value,icon:newEv.icon,venue:$("#fVenue").value.trim()||null,address:$("#fAddr").value.trim()||null,description:$("#fDesc").value.trim()||null,price_eur:Math.max(0,+$("#fPrice").value||0),booking:book,duration_min:Math.max(15,+$("#fDur").value||60),capacity:cap,starts_at:start.toISOString()};if($("#fRep").checked)f.repeat_weekly=true;else if(ex&&ex.repeat)f.repeat_weekly=false;
     if(adm)Object.assign(f,{ext_org:extOrg,ext_url:extUrl||null,city_id:c.id});
+    else if(ex&&ex.ext&&$("#fNoExt")&&$("#fNoExt").checked)f.ext_url=null;
     if(newEv.moved&&newEv.pt)Object.assign(f,{area:a[0],lat:newEv.pt.lat,lng:newEv.pt.lng});
     else if(!ex||a[0]!==ex.area||c.id!==ex.city){const r=rng(Date.now());Object.assign(f,{area:a[0],lat:a[1]+(r()-.5)*.006,lng:a[2]+(r()-.5)*.008})}
     const btn=ev.target.querySelector("button[type=submit]");btn.disabled=true;
@@ -1439,6 +1464,26 @@ function openEventForm(editId,dupId){
 
 /* ================= ВХОД ================= */
 let authRole="user";
+function openClaim(eid){
+  const e=findEv(eid);if(!e||!e.extOrg)return;
+  if(!loggedIn()){openSheet(`${sheetHead("Това ваше събитие ли е?",`„${esc(e.extOrg)}“`)}
+    <p class="hint">Създай безплатен профил на организатор. След като потвърдим, че организирате тези събития, ще ги управлявате сами и ще публикувате нови.</p>
+    <div style="display:grid;gap:10px"><button type="button" class="btn block" data-claimreg>Регистрация като организатор</button><button type="button" class="btn ghost block" data-auth="login">Вече имам профил · Вход</button></div>`);return}
+  if(S.role!=="org"){openSheet(`${sheetHead("Нужен е профил на организатор","")}
+    <p class="hint">Сега си с профил на потребител. За да поемеш обявите на „${esc(e.extOrg)}“, излез и създай профил на организатор (с имейла на организацията).</p>
+    <button type="button" class="btn ghost block" data-close>Разбрах</button>`);return}
+  openSheet(`${sheetHead("Това ваше събитие ли е?",`Ще прехвърлим към профила ти всички обяви на „${esc(e.extOrg)}“.`)}
+   <form class="form" id="claimForm" novalidate>
+    <label>Как да проверим, че организирате тези събития?<textarea id="clContact" maxlength="200" placeholder="Телефон за обратна връзка, служебен имейл или линк към официалната ви страница" required></textarea></label>
+    <label>Бележка (по желание)<textarea id="clNote" maxlength="1000" placeholder="Напр. длъжност, с кого да се свържем"></textarea></label>
+    <p class="hint" style="margin:0">Данните за връзка се ползват само за проверката и се изтриват след решението.</p>
+    <p class="err" id="clErr" role="alert"></p>
+    <button type="submit" class="btn block">Изпрати заявката</button></form>`);
+  $("#claimForm").addEventListener("submit",async ev=>{ev.preventDefault();const contact=$("#clContact").value.trim(),note=$("#clNote").value.trim();
+    if(contact.length<5){$("#clErr").textContent="Напиши как да се свържем с теб: телефон, имейл или линк.";return}
+    const ok=await act(()=>q(sb.from("claims").insert({event_id:e.id,ext_org:e.extOrg,user_id:LIVE.me.id,contact,note:note||null})),{reload:["claims"]});
+    if(ok){closeSheet();toast("Заявката е изпратена. Ще я прегледаме и ще получиш известие.");renderAll()}});
+}
 function openAuth(mode,msg){
   const reg=mode==="register";
   openSheet(`${sheetHead(reg?"Нов профил":"Вход",msg?esc(msg):"")}
@@ -1557,6 +1602,8 @@ document.addEventListener("click",ev=>{
   if(ds.obdone!==undefined||ds.obskip!==undefined){finishOb();return}
   // профил
   if(ds.auth){openAuth(ds.auth);return}
+  if(ds.claim){openClaim(ds.claim);return}
+  if(ds.claimreg!==undefined){authRole="org";openAuth("register","Регистрирай се като организатор. После се върни на събитието и натисни „Това е мое събитие“.");return}
   if(ds.arole){authRole=ds.arole;document.querySelectorAll("[data-arole]").forEach(b=>b.classList.toggle("on",b===t));const l=$("#aNameL");if(l)l.textContent=authRole==="org"?"Име на организацията":"Име или прякор";const h=$("#aNameH");if(h)h.textContent=authRole==="org"?"Показва се на обявите ти.":"Вижда го само организаторът, при който запазиш място. Не е нужно истинското ти име.";return}
   if(ds.forgot!==undefined){openForgot();return}
   if(ds.logout!==undefined){const n=S.userName;act(async()=>{await sb.auth.signOut();S.pending=null;S.screens=[];closeSheet();S.tab="home"},{reload:["me","events","orgs"],ok:`Довиждане, ${n}! Излезе от профила.`}).then(()=>scrollTo(0,0));return}
