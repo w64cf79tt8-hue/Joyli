@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261116192600";
+const JOYLI_BUILD="20261116201807";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -457,7 +457,7 @@ function renderSaved(){
     const orgs=S.follows.filter(o=>ORGS[o]);
     return head+`<div class="px">${seg}<div class="rows" style="margin-top:14px">${orgs.length?orgs.map((o,i)=>{const O=ORGS[o],evs=liveEvents().filter(e=>e.org===o&&upcoming(e)),rs=evs.flatMap(reviewsOf);return `<article class="row" style="--i:${i}"><button type="button" class="open" data-orgpage="${o}" style="grid-template-columns:56px 1fr"><div class="ava" style="background:${O.col};width:56px;height:56px;border-radius:16px">${esc(O.ini)}</div><div class="rb"><b>${esc(O.name)}</b><span class="ri">${ui("star")}<span>${rs.length?dec(avg(rs))+" · "+rs.length+" оценки":"Още няма оценки"}</span></span><span class="ri">${ui("cal")}<span>${evs.length} предстоящи събития</span></span></div></button><button type="button" class="heart on" data-follow="${o}" aria-label="Спри да следиш">${uiFill("heart")}</button></article>`}).join(""):emptyBox("Натисни сърцето при организатор, за да го следиш и да виждаш новите му събития.")}</div></div>`;
   }
-  const evs=withDist(allEvents());
+  const evs=withDist(allEvents().filter(upcoming));
   const booked=evs.filter(e=>S.bookings.includes(e.id)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const favs=evs.filter(e=>S.favs.includes(e.id)&&!S.bookings.includes(e.id)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   return head+`<div class="px">${seg}
@@ -675,7 +675,7 @@ const modOf=e=>e.mod||"approved";
 const MODL={pending:["Чака одобрение","pend"],approved:["Одобрено","ok"],rejected:["Отказано","warn"],hidden:["Скрито","warn"]};
 const STL={pending:["Чака одобрение","pend"],approved:["Одобрен","ok"],rejected:["Отказан","warn"],blocked:["Блокиран","warn"]};
 const ago=t=>{const m=Math.round((Date.now()-t)/6e4);if(m<1)return"сега";if(m<60)return"преди "+m+" мин";const h=Math.round(m/60);if(h<24)return"преди "+h+" ч";const d=Math.round(h/24);return"преди "+d+(d===1?" ден":" дни")};
-const pendEvents=()=>allEvents().filter(e=>modOf(e)==="pending");
+const pendEvents=()=>allEvents().filter(e=>modOf(e)==="pending"&&upcoming(e));
 const pendUsers=()=>LIVE.admin.users.filter(u=>u.status==="pending"&&u.role!=="admin");
 const unreadAdmin=()=>S.msgs.filter(m=>m.ua).length;
 const myThreads=()=>S.msgs.filter(m=>m.from===S.me).sort((a,b)=>b.items[b.items.length-1].at-a.items[a.items.length-1].at);
@@ -736,8 +736,8 @@ function adminHTML(){
      <div class="rows">${pendUsers().slice(0,3).map(admUserRow).join("")||emptyBox("Няма чакащи регистрации.")}</div>`;
   }
   if(A.tab==="events"){
-    const fl=[["pending","Чакащи"],["approved","Одобрени"],["rejected","Отказани"],["hidden","Скрити"],["all","Всички"]];
-    let l=allEvents().filter(e=>A.ev==="all"||modOf(e)===A.ev).filter(e=>A.city==="all"||e.city===A.city);
+    const fl=[["pending","Чакащи"],["approved","Одобрени"],["rejected","Отказани"],["hidden","Скрити"],["all","Всички"],["past","Минали"]];
+    let l=allEvents().filter(e=>A.ev==="past"?!upcoming(e):upcoming(e)&&(A.ev==="all"||modOf(e)===A.ev)).filter(e=>A.city==="all"||e.city===A.city);
     const q=A.q.trim().toLowerCase();if(q)l=l.filter(e=>(e.title+" "+(ORGS[e.org]?.name||"")+" "+e.venue).toLowerCase().includes(q));
     l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)||new Date(a.start)-new Date(b.start));
     body+=`<div class="agegrid" style="margin-bottom:10px">${fl.map(([k,lb])=>`<button type="button" class="agebtn${A.ev===k?" on":""}" data-aev="${k}">${lb}${k==="pending"&&pendEvents().length?` (${pendEvents().length})`:""}</button>`).join("")}</div>
