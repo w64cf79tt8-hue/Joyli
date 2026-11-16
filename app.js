@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261116134005";
+const JOYLI_BUILD="20261116192116";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -134,7 +134,7 @@ function cover(seedKey,palKey,art,opts={}){
   s+=`<g class="ico" style="animation-delay:-${(r()*5).toFixed(1)}s"><circle cx="${(ix+32*sc)|0}" cy="${(iy+32*sc)|0}" r="${(31*sc)|0}" fill="#fff" fill-opacity=".16"/><g transform="translate(${ix|0} ${iy|0}) scale(${sc})" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">${ART[art]||ART.star}</g></g>`;
   return `<svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${s}</svg>`;
 }
-const eventArt=(e,o)=>e.photo?`<img src="${e.photo}" alt="">`:cover(e.id+e.title,e.type,e.icon,o);
+const eventArt=(e,o)=>e.photo?`<img src="${esc(e.photo)}" alt="" referrerpolicy="no-referrer">`:cover(e.id+e.title,e.type,e.icon,o);
 
 /* Начален екран: катедрала, планини и пин */
 function splashArt(i){
@@ -654,8 +654,8 @@ const cmsV=(k,d)=>(S.cms[k]!==undefined&&S.cms[k]!=="")?S.cms[k]:d;
 const wT=i=>[cmsV("w"+i+"a",WTITLES[i][0]),cmsV("w"+i+"b",WTITLES[i][1]),cmsV("w"+i+"p",WTITLES[i][2])];
 const bT=k=>cmsV("b_"+k+"_t",catOf(k).banner),bS=k=>cmsV("b_"+k+"_s",catOf(k).bsub);
 const homeSub=()=>cmsV("home_sub","Нека открием следващото ти любимо събитие.");
-const welcomeImg=i=>S.cms["wimg"+i]?`<img src="${S.cms["wimg"+i]}" alt="">`:splashArt(i);
-const bannerImg=c=>S.cms["bimg_"+c.key]?`<img src="${S.cms["bimg_"+c.key]}" alt="">`:cover("bn"+c.key,c.key,c.icon,{right:true,big:true});
+const welcomeImg=i=>S.cms["wimg"+i]?`<img src="${esc(S.cms["wimg"+i])}" alt="">`:splashArt(i);
+const bannerImg=c=>S.cms["bimg_"+c.key]?`<img src="${esc(S.cms["bimg_"+c.key])}" alt="">`:cover("bn"+c.key,c.key,c.icon,{right:true,big:true});
 function readImage(file,maxW,cb){const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{const sc=Math.min(1,maxW/im.width),cv=document.createElement("canvas");cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);cb(cv.toDataURL("image/jpeg",.75))};im.onerror=()=>toast("Файлът не е снимка. Опитай с JPG или PNG.");im.src=rd.result};rd.readAsDataURL(file)}
 
 /* ================= ТАКСИ ================= */
@@ -1369,6 +1369,91 @@ document.addEventListener("click",ev=>{
 document.addEventListener("submit",ev=>{if(ev.target.id==="authForm"&&document.querySelector('[data-auth="register"].on'))trHit("funnel","reg_submit")},true);
 addEventListener("load",()=>setTimeout(()=>trHit("city",S.city),2000));
 
+/* ================= „ПОПЪЛНИ ОТ ЛИНК“ =================
+   Сървърът (admin_fetch) изтегля страницата, а тук намираме данните за събитието:
+   първо от структурираните данни (schema.org Event, Open Graph), после от текста. */
+const BG_MON=["януари","февруари","март","април","май","юни","юли","август","септември","октомври","ноември","декември"];
+const clip=(s,n)=>{s=String(s||"").trim();return s.length>n?s.slice(0,n-1).replace(/\s+\S*$/,"")+"…":s};
+function extractEvent(html,url){
+  const doc=new DOMParser().parseFromString(html,"text/html");
+  const meta=n=>(doc.querySelector(`meta[property="${n}"],meta[name="${n}"]`)?.getAttribute("content")||"").trim();
+  // текст без HTML (през DOMParser — нищо от чуждата страница не се изпълнява)
+  const txt=s=>{const t=new DOMParser().parseFromString(String(s||""),"text/html").body.textContent||"";return t.replace(/\s+/g," ").trim()};
+  // schema.org Event
+  let ev=null;
+  doc.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{
+    const walk=x=>{if(!x||ev||typeof x!=="object")return;if(Array.isArray(x))return x.forEach(walk);
+      if([].concat(x["@type"]||[]).some(t=>/Event$/i.test(t)))ev=x;else{if(x["@graph"])walk(x["@graph"]);if(x.mainEntity)walk(x.mainEntity)}};
+    walk(JSON.parse(s.textContent))}catch(e){}});
+  const out={url,found:[]};
+  const site=meta("og:site_name");
+  let title=txt(ev&&ev.name)||meta("og:title")||(doc.title||"").trim();
+  if(!ev){const parts=title.split(/\s+[|–—-]\s+/);if(parts.length>1&&parts[0].length>=6)title=parts[0]}
+  out.title=clip(title,80);
+  out.desc=clip(txt(ev&&ev.description)||meta("og:description")||meta("description"),600);
+  let img=ev&&ev.image;if(Array.isArray(img))img=img[0];if(img&&typeof img==="object")img=img.url||img.contentUrl;
+  img=img||meta("og:image")||meta("og:image:url")||meta("twitter:image");
+  try{if(img)out.image=new URL(img,url).href}catch(e){}
+  const orgO=ev&&(Array.isArray(ev.organizer)?ev.organizer[0]:ev.organizer);
+  let host="";try{host=new URL(url).hostname.replace(/^www\./,"")}catch(e){}
+  out.org=clip(txt(orgO&&orgO.name)||site||host,80);
+  // дата и продължителност
+  if(ev&&ev.startDate){const d=new Date(ev.startDate);if(!isNaN(d)){out.start=d;out.hasTime=/T\d/.test(ev.startDate)}
+    if(ev.endDate&&out.start){const e=new Date(ev.endDate),m=(e-out.start)/6e4;if(m>0&&m<=720)out.dur=Math.round(m)}}
+  // място
+  const loc=ev&&(Array.isArray(ev.location)?ev.location[0]:ev.location);
+  if(loc&&typeof loc==="object"){out.venue=clip(txt(loc.name),60);const a=loc.address;
+    if(typeof a==="string")out.address=a;else if(a){out.address=txt(a.streetAddress);out.cityName=txt(a.addressLocality)}}
+  // цена
+  const off=ev&&(Array.isArray(ev.offers)?ev.offers[0]:ev.offers);
+  if(off&&off.price!=null&&off.price!==""){let p=parseFloat(String(off.price).replace(",","."));if(!isNaN(p)){if(/BGN/i.test(off.priceCurrency||""))p/=1.95583;out.price=Math.round(p*100)/100}}
+  if(off&&off.url)try{out.bookUrl=new URL(off.url,url).href}catch(e){}
+  // текстът на страницата — за това, което липсва
+  doc.querySelectorAll("script,style,noscript,svg,nav,footer,header").forEach(n=>n.remove());
+  doc.querySelectorAll("p,div,li,h1,h2,h3,h4,h5,br,td,th,dd,dt,section,article,span,a").forEach(n=>n.append(" "));
+  const body=((doc.body&&doc.body.textContent)||"").replace(/\s+/g," ").slice(0,30000);
+  const hay=[out.title,out.desc,body].join(" \n ");
+  // възраст
+  const ag=String((ev&&ev.typicalAgeRange)||"")+" "+hay;let m;
+  if((m=ag.match(/(\d{1,2})\s*(?:-|–|—|до)\s*(\d{1,2})\s*(?:г\.|г\b|год|years|yrs)/i))&&+m[2]>=+m[1]){out.amin=+m[1];out.amax=+m[2]}
+  else if((m=String((ev&&ev.typicalAgeRange)||"").match(/^(\d{1,2})\s*-\s*(\d{1,2})$/))){out.amin=+m[1];out.amax=+m[2]}
+  else if((m=ag.match(/(?:от|над)\s*(\d{1,2})\s*(?:г\.|г\b|год)/i))){out.amin=+m[1];out.amax=99}
+  else if((m=ag.match(/\b(\d{1,2})\s*\+\s*(?:г|год|years)?/i))&&+m[1]<=18){out.amin=+m[1];out.amax=99}
+  if(out.amin!=null&&(out.amin>98||out.amax>99))delete out.amin;
+  // дата от текста
+  if(!out.start){const now=new Date(),cands=[];
+    const re1=/\b(\d{1,2})[./](\d{1,2})[./](20\d{2})\b(?:\D{0,25}?(\d{1,2})[:.](\d{2}))?/g;
+    while((m=re1.exec(hay))&&cands.length<20)cands.push(new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:10,m[5]?+m[5]:0));
+    const re2=new RegExp("\\b(\\d{1,2})\\s+("+BG_MON.join("|")+")(?:\\s+(20\\d{2}))?(?:\\D{0,25}?(\\d{1,2})[:.](\\d{2}))?","gi");
+    while((m=re2.exec(hay))&&cands.length<40){const mo=BG_MON.indexOf(m[2].toLowerCase());let y=m[3]?+m[3]:now.getFullYear();
+      let d=new Date(y,mo,+m[1],m[4]?+m[4]:10,m[5]?+m[5]:0);if(!m[3]&&d<now)d=new Date(y+1,mo,+m[1],m[4]?+m[4]:10,m[5]?+m[5]:0);cands.push(d)}
+    const fut=cands.filter(d=>!isNaN(d)&&d>now&&d.getMonth()>=0).sort((a,b)=>a-b);
+    if(fut.length){out.start=fut[0];out.hasTime=!(fut[0].getHours()===10&&fut[0].getMinutes()===0)}}
+  // цена от текста
+  if(out.price==null){if(/вход(ът)?\s+(е\s+)?(свободен|безплатен)|безплатн/i.test(hay))out.price=0;
+    else if((m=hay.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*(€|евро|EUR|лв\.?|лева|BGN)/i))){let p=parseFloat(m[1].replace(",","."));if(/лв|лева|BGN/i.test(m[2]))p/=1.95583;out.price=Math.round(p*100)/100}}
+  // адрес от текста
+  if(!out.address&&(m=body.match(/(?:ул\.|бул\.|улица|булевард|пл\.|площад)\s*[„"]?[А-Яа-яA-Za-z .„“"-]{2,40}?[“"]?\s*№?\s*\d+[А-Яа-я]?/)))out.address=m[0].trim();
+  // град
+  const where=[out.cityName,out.address,out.venue,out.title,out.desc,body.slice(0,5000)].join(" ");
+  const c=CITIES.find(c=>new RegExp("(^|[^А-Яа-я])"+c.name+"([^А-Яа-я]|$)").test(where));if(c)out.city=c.id;
+  if(out.address&&out.city){const cn=CITIES.find(x=>x.id===out.city).name;out.address=out.address.replace(new RegExp(",?\\s*(гр\\.\\s*)?"+cn+".*$"),"").trim()}
+  if(out.address)out.address=clip(out.address,80);
+  // вид
+  const low=(out.title+" "+out.desc).toLowerCase();
+  out.type=/театър|спектакъл|представлени|кукл|музей|изложб|кино/.test(low)?"culture":/концерт|музик|пеен|оркест/.test(low)?"music":
+    /работилниц|уъркшоп|workshop|рисуван|творчес|ателие/.test(low)?"workshop":/фестивал|празник|панаир|базар/.test(low)?"fest":
+    /спорт|футбол|плуван|танц|гимнаст|йога|катерен/.test(low)?"sport":/урок|курс|наук|образован|английск|робот|програмир|lego/.test(low)?"edu":"family";
+  return out;
+}
+// снимката: ако сайтът позволи, я копираме при нас (иначе остава линк към неговата)
+async function grabImage(src){
+  try{const r=await fetch(src,{mode:"cors"});if(!r.ok)return null;const bl=await r.blob();if(!/^image\//.test(bl.type))return null;
+    const bm=await createImageBitmap(bl),W=1200,sc=Math.min(1,W/bm.width),cv=document.createElement("canvas");
+    cv.width=Math.round(bm.width*sc);cv.height=Math.round(bm.height*sc);cv.getContext("2d").drawImage(bm,0,0,cv.width,cv.height);
+    return cv.toDataURL("image/jpeg",.85)}catch(e){return null}
+}
+
 /* ================= РЕНДЕР ================= */
 const TABS={home:renderHome,events:renderEvents,map:renderMap,saved:renderSaved,profile:renderProfile};
 function renderTab(){
@@ -1453,6 +1538,9 @@ function openEventForm(editId,dupId){
   const areaOpts=()=>c.areas.map((a,i)=>`<option value="${i}"${a[0]===v.area?" selected":""}>${esc(a[0])}</option>`).join("");
   openSheet(`${sheetHead(ex?"Редакция на събитие":dupId?"Копие на събитие":"Ново събитие",ex&&booked?booked+" души са запазили място. Ще видят, че събитието е обновено.":ex?"":adm?"Публикува се веднага, без одобрение.":"Публикуването е безплатно.")}
   <form class="form" id="evForm" novalidate>
+    ${adm&&!ex?`<div class="box" style="margin:0;display:grid;gap:8px"><b>Попълни от линк</b>
+      <div style="display:flex;gap:8px"><input type="url" id="fSrc" inputmode="url" placeholder="Постави линк към страницата на събитието" style="flex:1;min-width:0"><button type="button" class="btn sm" id="fFetch">Извлечи</button></div>
+      <p class="hint" id="fSrcHint" style="margin:0">Приложението ще попълни заглавие, дата, място, цена, възраст, снимка и описание. Провери ги преди да публикуваш.</p></div>`:""}
     ${adm?`<label>Организатор<input type="text" id="fOrg" maxlength="80" value="${esc(src&&src.extOrg||"")}" placeholder="напр. Куклен театър „Приказка“"></label>
     <label>Линк за запазване на място<input type="url" id="fExt" inputmode="url" value="${esc(src&&src.ext||"")}" placeholder="https://… (сайт или страница на организатора)"></label>
     <p class="hint" style="margin:-4px 0 0">Посетителите ще отиват на този линк, за да запазят място. Остави празно при свободен вход.</p>
@@ -1478,7 +1566,7 @@ function openEventForm(editId,dupId){
     <p class="err" id="fErr" hidden></p>
     <button type="submit" class="btn block">${ex?"Запази промените":"Публикувай"}</button>
   </form>`);
-  const drawPrev=()=>{const t=$("#fType").value;$("#fPrev").innerHTML=newEv.photo?`<img src="${newEv.photo}" alt="">`:cover("new"+newEv.icon,t,newEv.icon,{small:true});
+  const drawPrev=()=>{const t=$("#fType").value;$("#fPrev").innerHTML=newEv.photo?`<img src="${esc(newEv.photo)}" alt="">`:cover("new"+newEv.icon,t,newEv.icon,{small:true});
     $("#icoPick").innerHTML=ART_KEYS.map(k=>`<button type="button" data-ico="${k}" class="${!newEv.photo&&newEv.icon===k?"on":""}" aria-label="Илюстрация ${k}">${cover("pick"+k,t,k,{small:true})}</button>`).join("");$("#fNoPhoto").hidden=!newEv.photo};
   drawPrev();
   $("#fType").addEventListener("change",drawPrev);
@@ -1501,6 +1589,27 @@ function openEventForm(editId,dupId){
     geoHint("Търсим адреса…");try{const g=await geocode(ad,c);if(g){setPt(g.lat,g.lng,"Намерено: "+g.label);return g}geoHint("Не открихме този адрес в "+c.name+". Провери улицата и номера"+(hasL()?" или докосни картата.":"."));return null}
     catch(e){geoHint("Търсенето на адреса не работи в момента."+(hasL()?" Докосни картата, за да посочиш мястото.":""));return false}};
   $("#fFind").addEventListener("click",ev=>{ev.stopPropagation();findAddr()});
+  // „Попълни от линк“
+  if($("#fFetch"))$("#fFetch").addEventListener("click",async ev=>{ev.stopPropagation();
+    let u=$("#fSrc").value.trim();if(!u){$("#fSrcHint").textContent="Постави линк към събитието.";return}if(!/^https?:\/\//i.test(u))u="https://"+u;
+    const h=$("#fSrcHint"),btn=$("#fFetch");btn.disabled=true;h.textContent="Четем страницата…";
+    let x;try{const html=await q(sb.rpc("admin_fetch",{p_url:u}));x=extractEvent(html||"",u)}catch(e){btn.disabled=false;h.textContent=/facebook|instagram/i.test(u)?"Facebook и Instagram не позволяват четене на събитията си. Пробвай със сайта на организатора или билетната страница.":bgErr(e);return}
+    btn.disabled=false;const got=[],miss=[],set=(sel,val)=>{const el=$(sel);if(el&&val!=null&&val!==""){el.value=val;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));return true}return false};
+    if(x.city&&$("#fCity")&&x.city!==c.id){$("#fCity").value=x.city;$("#fCity").dispatchEvent(new Event("change"))}
+    set("#fOrg",x.org);set("#fExt",x.bookUrl||u);
+    set("#fTitle",x.title)?got.push("заглавие"):miss.push("заглавие");
+    if(x.start){set("#fDate",ymd(x.start));if(x.hasTime)set("#fTime",hm(x.start));got.push(x.hasTime?"дата и час":"дата");if(!x.hasTime)miss.push("час")}else miss.push("дата");
+    if(x.amin!=null){set("#fAmin",x.amin);$("#fAmax").value=x.amax>=99?"":x.amax;$("#fAmax").dispatchEvent(new Event("input",{bubbles:true}));got.push("възраст")}else miss.push("възраст");
+    if(x.price!=null){set("#fPrice",x.price);got.push("цена")}else miss.push("цена");
+    if(x.dur)set("#fDur",x.dur);
+    if(set("#fVenue",x.venue))got.push("място");
+    if(set("#fAddr",x.address)){newEv.exact=false;got.push("адрес")}else miss.push("адрес");
+    if(set("#fDesc",x.desc))got.push("описание");
+    $("#fType").value=x.type;
+    if(x.city)got.push("град");
+    if(x.image){newEv.photo=x.image;drawPrev();got.push("снимка");grabImage(x.image).then(d=>{if(d&&newEv.photo===x.image){newEv.photo=d;drawPrev()}})}
+    h.textContent=(got.length?"Попълнено: "+got.join(", ")+".":"Не открихме данни на тази страница.")+(miss.length?" Липсва: "+miss.join(", ")+" — попълни ги ръчно.":"")+" Провери всичко преди да публикуваш.";
+    if(x.address&&hasL())findAddr()});
   if(adm)$("#fCity").addEventListener("change",e=>{c=CITIES.find(x=>x.id===e.target.value);v.area=c.areas[0][0];$("#fArea").innerHTML=areaOpts();$("#fAreaL").textContent=`Квартал (${c.name})`;
     newEv.pt=null;newEv.moved=false;newEv.exact=false;if(LF)LF.recenter()});
   $("#evForm").addEventListener("submit",async ev=>{
