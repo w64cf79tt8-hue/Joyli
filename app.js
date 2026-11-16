@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261116192116";
+const JOYLI_BUILD="20261116192600";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1066,6 +1066,7 @@ const ERR_BG=[
   [/Failed to fetch|NetworkError|network/i,"Няма връзка с интернет. Провери връзката и опитай пак."],
   [/JWT|session/i,"Сесията изтече. Влез отново."],
   [/ext_url|ext_org|repeat_weekly|occurs_at|age_min|age_max|schema cache/i,"Базата не е обновена. Пусни обновленията (стъпки 4, 5 и 6) от „Joyli SQL“ и опитай пак."],
+  [/admin_fetch|function .*http|extension "?http/i,"„Попълни от линк“ още не е включено. Пусни стъпка 9 от „Joyli SQL“, когато решиш."],
   [/Bucket not found/i,"Липсва хранилището за снимки в Supabase."],
   [/row-level security/i,"Нямаш права за това действие."],
   [/payload too large|exceeded the maximum/i,"Снимката е твърде голяма."]
