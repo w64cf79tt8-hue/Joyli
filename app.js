@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261116132058";
+const JOYLI_BUILD="20261116134005";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -627,8 +627,8 @@ function dashHTML(){
     <div class="stats"><div class="stat"><b>${active.length}</b><span>активни събития</span></div><div class="stat"><b>${tb}</b><span>резервации</span></div><div class="stat"><b>${feeSum(orgEvents())} €</b><span>${freeNow()?"такса · безплатно до "+freeDate():"такса за плащане"}</span></div></div>
     ${freeNow()?`<div class="pendban" style="margin:0;background:color-mix(in srgb,var(--ok) 12%,var(--surface));border-color:color-mix(in srgb,var(--ok) 35%,var(--line))">${ui("check")}<span><b>Без такси до ${freeDate()}</b><br>${feeNote()}</span></div>`:`<p class="hint">${feeNote()}</p>`}
     <button type="button" class="btn block" data-newev>${ui("plus")} Публикувай събитие</button></div>
-   ${evs.map(e=>{const d=new Date(e.start),at=attendees(e);return `<div class="dash"><div class="th">${eventArt(e,{small:true})}</div>
-    <div style="min-width:0;display:grid;gap:4px"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(d)} · ${esc(e.area)}</span></span><span>${e.mod==="pending"?`<span class="tg pend">Чака одобрение</span>`:""}${e.mod==="rejected"?`<span class="tg warn">Отказано</span>`:""}${e.mod==="hidden"?`<span class="tg warn">Скрито от администратор</span>`:""}${e.cancelled?`<span class="tg warn">Отменено</span>`:""}${e.updatedAt?`<span class="tg">Редактирано</span>`:""}<span class="tg">${e.ageL||catOf(e.cat).short}</span></span>${e.mod==="rejected"&&e.modNote?`<span class="hint">Причина: ${esc(e.modNote)}</span>`:""}</div>
+   ${evs.map(e=>{const d=new Date(e.start),at=attendees(e),os=(LIVE.ostats||{})[e.id];return `<div class="dash"><div class="th">${eventArt(e,{small:true})}</div>
+    <div style="min-width:0;display:grid;gap:4px"><b>${esc(e.title)}</b><span class="ri">${ui("cal")}<span>${whenShort(d)} · ${esc(e.area)}</span></span>${os?`<span class="hint">30 дни: <b>${os.views}</b> прегледа · <b>${+os.book+ +os.ext}</b> ${e.ext?"към сайта ви":"натискания „Запази“"} · <b>${os.favs}</b> в любими</span>`:""}<span>${e.mod==="pending"?`<span class="tg pend">Чака одобрение</span>`:""}${e.mod==="rejected"?`<span class="tg warn">Отказано</span>`:""}${e.mod==="hidden"?`<span class="tg warn">Скрито от администратор</span>`:""}${e.cancelled?`<span class="tg warn">Отменено</span>`:""}${e.updatedAt?`<span class="tg">Редактирано</span>`:""}<span class="tg">${e.ageL||catOf(e.cat).short}</span></span>${e.mod==="rejected"&&e.modNote?`<span class="hint">Причина: ${esc(e.modNote)}</span>`:""}</div>
     <div class="full btnrow"><button type="button" class="btn ghost sm" data-open="${e.id}">Виж</button><button type="button" class="btn ghost sm" data-edit="${e.id}">${ui("edit")} Редактирай</button>${e.cancelled?`<button type="button" class="btn ghost sm" data-restore="${e.id}">Възстанови</button>`:`<button type="button" class="btn ghost sm" data-cancelask="${e.id}">Отмени</button>`}</div>
     <div class="full box" id="ca-${e.id}" hidden><span class="hint">Сигурен ли си? Събитието изчезва от търсенето, а записаните ще видят, че е отменено.</span><div class="btnrow"><button type="button" class="btn sm" data-cancel="${e.id}">Да, отмени</button><button type="button" class="btn ghost sm" data-cancelno="${e.id}">Не</button></div></div>
     <div class="full">${e.cancelled?"":e.booking?(at.length?at.map(a=>`<div class="att"><span>${e.repeat&&a.when?whenShort(new Date(a.when))+" · ":""}${esc(a.name)} · <b class="code">${a.code}</b> · <span class="st ${a.st}">${a.st==="attended"?(feeFor(a)?"дойде · "+feeFor(a)+" €":"дойде"):a.st==="no_show"?"не дойде":"очаква се"}</span></span><span style="display:flex;gap:6px"><button type="button" class="btn sm" data-att="${a.id}" data-v="attended">Дойде</button><button type="button" class="btn ghost sm" data-att="${a.id}" data-v="no_show">Не дойде</button></span></div>`).join(""):`<p class="hint">Още няма резервации.</p>`):`<p class="hint">Свободен вход, без резервации и без такса.</p>`}</div></div>`}).join("")||emptyBox(`Нямаш събития в ${esc(city().name)}. Публикувай първото.`)}
@@ -685,11 +685,38 @@ function totalAttended(){return LIVE.admin.totals.attended||0}
 function totalFees(){return +LIVE.admin.totals.fees||0}
 function userAva(u){const nm=u.name||u.full_name||"?",o=u.role==="org"?ORGS[u.orgId||u.id]:null;return `<div class="ava" style="background:${o?o.col:"var(--brand)"};width:44px;height:44px;border-radius:14px">${esc(o?o.ini:(nm.replace(/[^А-Яа-яA-Za-z]/g,"")[0]||"?").toUpperCase())}</div>`}
 
+/* ---------- анонимна статистика ---------- */
+const SCR_L={"tab:home":"Начало","tab:events":"Събития","tab:map":"Карта","tab:saved":"Запазени","tab:profile":"Профил",event:"Страница на събитие",filters:"Филтри",orgpage:"Страница на организатор",dash:"Организаторски панел",date:"Избор на дата",interests:"Интереси",welcome:"Начален екран",policy:"Политика",inbox:"Известия",thread:"Съобщения",mydata:"Моите данни"};
+const fmtSec=s=>s<60?Math.round(s)+" сек":Math.floor(s/60)+" мин "+String(Math.round(s%60)).padStart(2,"0")+" сек";
+function barRows(rows,max,fmt){return rows.map(r=>`<div class="srow"><div class="sl"><span>${esc(r.l)}</span><b>${fmt(r)}</b></div><div class="sbar"><i style="width:${Math.max(2,Math.round(100*r.v/(max||1)))}%"></i></div></div>`).join("")}
+function statsHTML(){
+  const A=S.adm,d=A.days||30,R=LIVE.astats||[];
+  const pick=`<div class="agegrid" style="margin-bottom:12px">${[[7,"7 дни"],[30,"30 дни"],[90,"90 дни"]].map(([k,l])=>`<button type="button" class="agebtn${d===k?" on":""}" data-adays="${k}">${l}</button>`).join("")}</div>`;
+  if(A.statsLoading&&!R.length)return pick+`<p class="hint">Зареждаме…</p>`;
+  const of=k=>R.filter(r=>r.kind===k),sum=(a,f="hits")=>a.reduce((s,r)=>s+(+r[f]||0),0);
+  const scr=of("screen").map(r=>({l:SCR_L[r.key]||r.key,v:+r.hits,avg:(+r.secs)/(+r.hits||1)})).sort((a,b)=>b.v-a.v);
+  const ev={};["ev_view","ev_book","ev_ext","ev_fav"].forEach(k=>of(k).forEach(r=>{(ev[r.key]=ev[r.key]||{id:r.key,ev_view:0,ev_book:0,ev_ext:0,ev_fav:0})[k]=+r.hits}));
+  const top=Object.values(ev).sort((a,b)=>b.ev_view-a.ev_view).slice(0,10).map(x=>{const e=findEv(x.id);return{l:e?e.title:"Изтрито или минало събитие",v:x.ev_view,x}});
+  const cities=of("city").map(r=>({l:(CITIES.find(c=>c.id===r.key)||{name:r.key}).name,v:+r.hits})).sort((a,b)=>b.v-a.v).slice(0,10);
+  const ages=of("age").map(r=>({l:catOf(r.key).label,v:+r.hits})).sort((a,b)=>b.v-a.v);
+  const fn=k=>+((of("funnel").find(r=>r.key===k)||{}).hits||0),ro=fn("reg_open"),rs=fn("reg_submit");
+  const visits=sum(of("screen")),secs=sum(of("screen"),"secs"),views=sum(of("ev_view")),acts=sum(of("ev_book"))+sum(of("ev_ext"));
+  if(!R.length)return pick+emptyBox("Още няма данни за този период. Статистиката започва да се събира от днес.");
+  return pick+`<p class="hint" style="margin-bottom:12px">Анонимни общи бройки — без имена, профили и бисквитки. Твоите посещения като админ не се броят.</p>
+   <div class="tiles"><div class="tile"><b>${visits}</b><span>отваряния на страници</span></div><div class="tile"><b>${fmtSec(secs/(visits||1))}</b><span>средно време на страница</span></div>
+    <div class="tile"><b>${views}</b><span>прегледа на събития</span></div><div class="tile"><b>${acts}</b><span>натискания „Запази“ / към организатора</span></div></div>
+   <div class="sec"><h2>Страници</h2></div><div class="panel">${barRows(scr,scr[0]&&scr[0].v,r=>`${r.v} · ср. ${fmtSec(r.avg)}`)}</div>
+   <div class="sec"><h2>Най-гледани събития</h2></div><div class="panel">${top.length?barRows(top,top[0].v,r=>`${r.v} 👁 · ${r.x.ev_book+r.x.ev_ext} → · ${r.x.ev_fav} ♥`):`<p class="hint">Още няма прегледи.</p>`}</div>
+   <div class="sec"><h2>Градове</h2></div><div class="panel">${cities.length?barRows(cities,cities[0].v,r=>r.v+" сесии"):`<p class="hint">Няма данни.</p>`}</div>
+   ${ages.length?`<div class="sec"><h2>Търсени възрасти (филтри)</h2></div><div class="panel">${barRows(ages,ages[0].v,r=>r.v)}</div>`:""}
+   <div class="sec"><h2>Регистрация</h2></div><div class="panel"><p style="margin:0">Отворили формата: <b>${ro}</b> · изпратили: <b>${rs}</b>${ro?` · <b>${Math.round(100*rs/ro)}%</b> довършват`:""}</p></div>`;
+}
+
 /* ================= АДМИН: ЕКРАНИ ================= */
 function adminHTML(){
   const A=S.adm,pe=pendEvents().length,pu=pendUsers().length,um=unreadAdmin();
   const pc=(LIVE.claims||[]).filter(c=>c.status==="pending").length;
-  const tabs=[["overview","Обзор",0],["events","Обяви",pe],["users","Регистрации",pu],["claims","Собственост",pc],["msgs","Съобщения",um],["cast","Известия",0],["content","Съдържание",0]];
+  const tabs=[["overview","Обзор",0],["events","Обяви",pe],["users","Регистрации",pu],["claims","Собственост",pc],["stats","Статистика",0],["msgs","Съобщения",um],["cast","Известия",0],["content","Съдържание",0]];
   const head=`<div class="bar px"><button type="button" class="icon-btn plain" data-back aria-label="Назад">${ui("back")}</button><h1>Админ панел</h1><span></span></div>
    <div class="px"><div class="pills" role="tablist">${tabs.map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${A.tab===k}" class="pill tabp${A.tab===k?" on":""}" data-atab="${k}">${l}${n?` <em class="cnt">${n}</em>`:""}</button>`).join("")}</div></div>`;
   let body="";
@@ -726,6 +753,7 @@ function adminHTML(){
      <p class="hint" style="margin-bottom:12px">Новите профили могат да разглеждат, но запазват места, оценяват и публикуват едва след одобрение.</p>
      <div class="rows">${l.map(admUserRow).join("")||emptyBox("Няма профили в този списък.")}</div>`;
   }
+  if(A.tab==="stats")body=statsHTML();
   if(A.tab==="claims"){
     const cl=(LIVE.claims||[]).slice(0,100);
     body=`<p class="hint" style="margin-bottom:12px">Организатори, които казват, че обявите, добавени от теб, са техни. Провери данните (обади се, виж имейла или сайта) и потвърди. При потвърждение всичките им обяви минават в техния профил.</p>
@@ -816,6 +844,8 @@ function checkAdminHash(){}
 function adminClick(ds,t,ev){
   if(policyClick(ds)||castClick(ds,t)||dataClick(ds))return true;
   if(ds.admin){closeSheet();S.adm.tab=ds.admin;S.adm.rej=null;push("admin");return true}
+  if(ds.atab==="stats"||ds.adays){if(ds.adays)S.adm.days=+ds.adays;S.adm.tab="stats";S.adm.statsLoading=1;renderScreen();
+    act(()=>LOAD.astats(),{silent:true}).then(()=>{S.adm.statsLoading=0;renderScreen()});return true}
   if(ds.atab){S.adm.tab=ds.atab;S.adm.rej=null;S.adm.lim=30;renderScreen();$("#scr").scrollTop=0;return true}
   if(ds.aev){S.adm.ev=ds.aev;S.adm.lim=30;renderScreen();return true}
   if(ds.areg){S.adm.reg=ds.areg;renderScreen();return true}
@@ -974,6 +1004,7 @@ function policyBody(){
    <p>В зависимост от използваните функции можем да съхраняваме информация за резервации, любими събития, оценки и предпочитания.</p>
    <p>Ако разрешиш известията, съхраняваме и идентификатор на устройството, издаден от Apple или Google, за да ти ги изпращаме. Той не съдържа името или имейла ти.</p>
    <p>За сигурността и работата на приложението може да се обработват и ограничени технически данни, например IP адрес.</p>
+   <p>Събираме и анонимна обща статистика — например колко пъти е отворена дадена страница или събитие и средно колко време се разглежда. Тя не съдържа имена, имейли, идентификатори на устройства или бисквитки и не може да се свърже с конкретен човек.</p>
    <p>Местоположението ти не се изпраща до нас. Разстоянието до събитията се изчислява на твоя телефон.</p>
    <p>Не изискваме ЕГН, телефонен номер, домашен адрес или данни за банкова карта.</p>`)}
   ${P("3. За какво използваме данните?",`<p>Използваме ги единствено за:</p>${li(["Създаване и управление на профила.","Резервиране на места за събития.","Изпращане на важна информация за резервациите.","Подобряване на работата и сигурността на приложението."])}
@@ -1099,6 +1130,8 @@ const LOAD={
   async claims(){LIVE.claims=[];if(!LIVE.me||LIVE.me.role==="user")return;
     let cq=sb.from("claims").select("*").order("created_at",{ascending:false}).limit(200);if(LIVE.me.role!=="admin")cq=cq.eq("user_id",LIVE.me.id);
     try{LIVE.claims=await q(cq)}catch(e){LIVE.claims=[]}},
+  async astats(){const r=await q(sb.rpc("admin_stats",{p_days:S.adm.days||30}));LIVE.astats=r||[]},
+  async ostats(){LIVE.ostats={};try{const r=await q(sb.rpc("org_stats",{p_days:30}));(r||[]).forEach(x=>LIVE.ostats[x.event_id]=x)}catch(e){}},
   async myFees(){const rows=await q(sb.from("organizer_fees").select("attendees,total_eur").eq("organizer_id",LIVE.me.id));LIVE.myFees=rows.reduce((s,r)=>s+(+r.total_eur||0),0)},
   async attendees(eid){const rows=await q(sb.rpc("event_attendees",{p_event:eid}));LIVE.attendees[eid]=rows.map(r=>({id:r.booking_id,name:r.name||"Посетител",code:r.code,st:r.status,when:r.occurs_at||null}))},
   async admin(){const[us,tot,cs]=await Promise.all([q(sb.rpc("admin_users")),q(sb.rpc("admin_totals")),q(sb.from("broadcasts").select("*").order("created_at",{ascending:false}).limit(50))]);
@@ -1291,6 +1324,50 @@ function lmForm(getCity,onPick){
 }
 // при отваряне: ако човекът вече е разрешил локацията, я обновяваме тихо (може да се е преместил)
 addEventListener("load",()=>{try{if(S.posSrc==="gps"&&navigator.permissions)navigator.permissions.query({name:"geolocation"}).then(r=>{if(r.state==="granted")locate(true)}).catch(()=>{})}catch(e){}});
+
+/* ================= АНОНИМНА СТАТИСТИКА =================
+   Брои само общо: колко пъти е отворена страница/събитие и колко секунди стоят хората.
+   Нищо не се свързва с човек, профил или устройство; няма бисквитки и идентификатори. */
+const TR={buf:{},cur:null,t0:0,sent:0};
+const trOn=()=>typeof sb!=="undefined"&&!!sb&&!isAdmin();
+function trHit(kind,key,n=1,s=0){if(!trOn()||!key)return;const id=kind+"|"+String(key).slice(0,80);const b=TR.buf[id]||(TR.buf[id]={k:kind,key:String(key).slice(0,80),n:0,s:0});b.n+=n;b.s+=s}
+// коя страница се гледа в момента
+function trScreen(){
+  if(document.visibilityState!=="visible")return null;
+  const top=S.screens[S.screens.length-1];
+  if(top){if(top.name==="event")return"event";if(top.name==="admin")return null;return top.name}
+  return "tab:"+S.tab;
+}
+function trTick(){
+  const cur=trScreen(),now=Date.now();
+  if(cur===TR.cur)return;
+  if(TR.cur){const s=Math.min(1800,Math.round((now-TR.t0)/1000));if(s>=1)trHit("screen",TR.cur,1,s)}
+  TR.cur=cur;TR.t0=now;
+}
+// при всяко ново отваряне на събитие (и от събитие към събитие)
+let trLastEv=null;
+function trEvWatch(){const top=S.screens[S.screens.length-1],id=top&&top.name==="event"?top.id:null;if(id&&id!==trLastEv&&TR.cur==="event")trHit("ev_view",id);trLastEv=id}
+async function trFlush(){
+  const items=Object.values(TR.buf).map(b=>({k:b.k,key:b.key,n:Math.min(b.n,30),s:Math.min(b.s,3600)}));
+  if(!items.length||!trOn())return;TR.buf={};
+  try{for(let i=0;i<items.length;i+=60)await sb.rpc("track",{p_items:items.slice(i,i+60)})}catch(e){}
+}
+setInterval(()=>{trTick();trEvWatch()},1000);
+setInterval(trFlush,30000);
+document.addEventListener("visibilitychange",()=>{trTick();if(document.visibilityState!=="visible")trFlush()});
+// действия: запазване, линк към организатора, любими, регистрация
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-book],[data-fav],[data-auth],a[href],[data-claim],[data-fapply]");if(!t)return;
+  const top=S.screens[S.screens.length-1],eid=top&&top.name==="event"?top.id:null;
+  if(t.dataset.book)trHit("ev_book",t.dataset.book);
+  else if(t.dataset.fav&&!isFav(t.dataset.fav))trHit("ev_fav",t.dataset.fav);
+  else if(t.dataset.auth==="register")trHit("funnel","reg_open");
+  else if(t.dataset.claim)trHit("funnel","claim_open");
+  else if(t.dataset.fapply!==undefined&&S.FD){(S.FD.ages||[]).forEach(a=>trHit("age",a))}
+  else if(t.tagName==="A"&&eid&&t.closest(".foot")){const e=findEv(eid);if(e&&e.ext)trHit("ev_ext",eid)}
+},true);
+document.addEventListener("submit",ev=>{if(ev.target.id==="authForm"&&document.querySelector('[data-auth="register"].on'))trHit("funnel","reg_submit")},true);
+addEventListener("load",()=>setTimeout(()=>trHit("city",S.city),2000));
 
 /* ================= РЕНДЕР ================= */
 const TABS={home:renderHome,events:renderEvents,map:renderMap,saved:renderSaved,profile:renderProfile};
@@ -1670,7 +1747,7 @@ function locate(quiet){
 
 /* ================= СЪБИТИЕ, ПАНЕЛ, ПАРОЛА ================= */
 function openEvent(id){push("event",{id});LOAD.reviews(id).then(()=>{const t=S.screens[S.screens.length-1];if(t&&t.name==="event"&&t.id===id)renderScreen()}).catch(()=>{})}
-function loadDash(){const evs=orgEvents().filter(e=>e.booking);busy(true);Promise.all(evs.map(e=>LOAD.attendees(e.id))).then(()=>LOAD.myFees()).then(()=>renderScreen()).catch(e=>toast(bgErr(e))).finally(()=>busy(false))}
+function loadDash(){const evs=orgEvents().filter(e=>e.booking);busy(true);Promise.all(evs.map(e=>LOAD.attendees(e.id)).concat(LOAD.ostats())).then(()=>LOAD.myFees()).then(()=>renderScreen()).catch(e=>toast(bgErr(e))).finally(()=>busy(false))}
 function openForgot(){
   openSheet(`${sheetHead("Забравена парола","Ще ти изпратим линк за нова парола.")}
    <form class="form" id="forgotForm" novalidate><label>Имейл<input type="text" id="fgEmail" inputmode="email" autocomplete="email"></label><p class="err" id="fgErr" hidden></p><button type="submit" class="btn block">Изпрати линк</button></form>`);
