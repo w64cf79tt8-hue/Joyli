@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261117110253";
+const JOYLI_BUILD="20261117112055";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1154,6 +1154,9 @@ async function uploadImage(dataUrl,folder){
 }
 async function saveProfile(fields){await q(sb.from("profiles").update(fields).eq("id",LIVE.me.id));Object.assign(LIVE.me,fields)}
 
+/* ---------- линк от страниците по градове: /?city=plv ---------- */
+try{const qc=new URLSearchParams(location.search).get("city");if(qc&&CITIES.some(c=>c.id===qc)){S.city=qc;S.posSrc="area";persist()}
+  if(location.search)history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
 /* ================= ИНСТАЛИРАНЕ НА ТЕЛЕФОНА (PWA) ================= */
 const isStandalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
