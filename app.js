@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261116201807";
+const JOYLI_BUILD="20261117100206";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -483,6 +483,7 @@ function renderProfile(){
   if(!loggedIn())return head+`<div class="px"><div class="menu" style="padding:16px">${loginBtns}</div><div class="menu" style="margin-top:14px">
     ${mrow("grid","Моите интереси",esc(interestsSummary()),"data-interests")}
     ${mrow("pin","Любими локации",esc(city().name),"data-loc")}
+    ${isStandalone()?"":mrow("plus","Добави към началния екран","Отваряй Joyli като приложение","data-howinstall")}
     ${mrow("grid","Политика за поверителност","Какви данни пазим и защо","data-policy")}</div>
     <p class="sample">Организатор ли си? Регистрирай се като организатор и публикувай събития безплатно.</p></div>`;
   const pendBan=u.status==="pending"?`<div class="pendban">${ui("clock")}<span><b>Профилът чака одобрение</b><br>Администратор ще потвърди регистрацията ти. Дотогава можеш да разглеждаш, но не и да ${org?"публикуваш събития":"запазваш места и да оценяваш"}.</span></div>`:"";
@@ -509,7 +510,7 @@ function welcomeHTML(){
    <div class="wslides" id="wslides">${[0,1,2].map(i=>`<div class="wslide">${welcomeImg(i)}</div>`).join("")}</div>
    <div class="wcard px"><div class="dots" id="wdots"><i class="on"></i><i></i><i></i></div>
    <button type="button" class="btn block" data-start>Започни ${ui("arrow")}</button>
-   <p class="hint">Вече имаш профил? <button type="button" data-auth="login" class="lnk">Вход</button></p><p class="hint" style="margin-top:-6px"><button type="button" class="lnk" data-policy style="font-weight:600;color:var(--muted)">Политика за поверителност</button></p></div></div>`;
+   <p class="hint">Вече имаш профил? <button type="button" data-auth="login" class="lnk">Вход</button>${isStandalone()?"":` · <button type="button" class="lnk" data-howinstall>Добави на телефона</button>`}</p><p class="hint" style="margin-top:-6px"><button type="button" class="lnk" data-policy style="font-weight:600;color:var(--muted)">Политика за поверителност</button></p></div></div>`;
 }
 const WTITLES=[["Събития","в България","Открий интересни събития за теб и твоето семейство в цялата страна."],["Всичко","около теб","Виж на картата какво се случва в твоя квартал днес и през уикенда."],["Едно докосване","и си вътре","Запази място, остави оценка и следи любимите си организатори."]];
 function interestsHTML(step){
@@ -1158,13 +1159,29 @@ const isStandalone=()=>matchMedia("(display-mode: standalone)").matches||navigat
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 let deferredPrompt=null;
 addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;if(S.tab==="home")renderTab()});
+const inApp=()=>/Instagram|FBAN|FBAV|FB_IAB|Messenger|TikTok|Line\//i.test(navigator.userAgent);
+const isAndroid=()=>/android/i.test(navigator.userAgent);
+function installSteps(){
+  if(isStandalone())return `<p>Joyli вече е на началния ти екран. 🎉</p>`;
+  if(inApp())return `<p><b>Сега си в браузъра на Instagram/Facebook.</b> Оттук не може да се добави към началния екран.</p>
+   <ol class="steps"><li>Натисни <b>•••</b> горе вдясно.</li><li>Избери <b>„Отвори в браузъра“</b> (${isIOS()?"Safari":"Chrome"}).</li><li>После следвай стъпките, които ще излязат там.</li></ol>`;
+  if(isIOS())return `<ol class="steps"><li>Натисни бутона <b>Сподели</b> ${ui("share")} — долу в средата (в Safari) или горе вдясно (в Chrome).</li>
+   <li>Превърти надолу и избери <b>„Добави към начален екран“</b> (Add to Home Screen).</li><li>Натисни <b>„Добави“</b> горе вдясно.</li></ol>
+   <p class="hint">Не виждаш „Добави към начален екран“? Превърти списъка докрай и натисни „Редактиране на действия“, за да го добавиш.</p>`;
+  if(deferredPrompt)return `<p>Натисни бутона — Joyli ще се появи като приложение на телефона.</p><button type="button" class="btn block" data-install>Инсталирай Joyli</button>`;
+  if(isAndroid())return `<ol class="steps"><li>Натисни менюто <b>⋮</b> горе вдясно в Chrome.</li><li>Избери <b>„Инсталиране на приложението“</b> или <b>„Добавяне към началния екран“</b>.</li><li>Потвърди с <b>„Инсталиране“</b>.</li></ol>`;
+  return `<p>Отвори <b>joyli.fun</b> на телефона си и оттам го добави към началния екран.</p>`;
+}
+function openInstall(){openSheet(`${sheetHead("Joyli на началния екран","Отваря се като приложение, с иконка, и може да ти изпраща напомняния.")}<div class="install-steps">${installSteps()}</div><button type="button" class="btn ghost block" data-close>Готово</button>`)}
 function installTip(){
   if(isStandalone()||saved.tipOff)return"";
-  if(isIOS())return `<div class="install-tip">${ui("share")}<span><b>Добави Joyli към началния екран</b><br>В Safari натисни „Сподели“ и после „Добави към начален екран“. Така Joyli се отваря като приложение и може да ти изпраща напомняния.</span><button type="button" data-tipoff aria-label="Скрий">${ui("x")}</button></div>`;
+  if(isIOS()||inApp())return `<div class="install-tip">${ui("share")}<span><b>Добави Joyli към началния екран</b><br>${inApp()?"Първо отвори сайта в браузъра (••• горе вдясно).":"Натисни „Сподели“ и „Добави към начален екран“."} <button type="button" class="lnk" data-howinstall>Как?</button></span><button type="button" data-tipoff aria-label="Скрий">${ui("x")}</button></div>`;
   if(deferredPrompt)return `<div class="install-tip">${ui("plus")}<span><b>Инсталирай Joyli</b><br>С иконка на телефона, отваря се като приложение.</span><button type="button" class="btn sm" data-install style="color:#fff;margin-left:auto">Инсталирай</button></div>`;
+  if(isAndroid())return `<div class="install-tip">${ui("plus")}<span><b>Добави Joyli към началния екран</b><br>Меню ⋮ в Chrome → „Инсталиране на приложението“. <button type="button" class="lnk" data-howinstall>Как?</button></span><button type="button" data-tipoff aria-label="Скрий">${ui("x")}</button></div>`;
   return"";
 }
 document.addEventListener("click",e=>{
+  if(e.target.closest("[data-howinstall]")){openInstall();return}
   if(e.target.closest("[data-tipoff]")){saved.tipOff=1;persist();renderTab()}
   if(e.target.closest("[data-install]")&&deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.finally(()=>{deferredPrompt=null;renderTab()})}
 });
@@ -1520,6 +1537,7 @@ function openSettings(){
   openSheet(`${sheetHead("Настройки")}
    <div class="panel" style="box-shadow:none;background:var(--sunk)"><b>${esc(S.userName)}</b><span class="hint">${esc(S.email)} · ${S.role==="org"?"организатор":S.role==="admin"?"администратор":"потребител"}</span>
    ${S.role!=="admin"?`<label class="form"><span class="hint">${S.role==="org"?"Име на организацията":"Име или прякор"}</span><input type="text" id="uname" value="${esc(S.userName)}" maxlength="30"></label>`:""}</div>
+   ${isStandalone()?"":`<button type="button" class="btn ghost block" data-howinstall>${ui("plus")} Добави Joyli към началния екран</button>`}
    <button type="button" class="btn line block" data-logout>${ui("logout")} Изход от профила</button>
    `);
 }
