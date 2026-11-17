@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261117112055";
+const JOYLI_BUILD="20261117112736";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1155,6 +1155,8 @@ async function uploadImage(dataUrl,folder){
 async function saveProfile(fields){await q(sb.from("profiles").update(fields).eq("id",LIVE.me.id));Object.assign(LIVE.me,fields)}
 
 /* ---------- линк от страниците по градове: /?city=plv ---------- */
+let deepEv=null;
+try{const qe=new URLSearchParams(location.search).get("e");if(qe&&/^[0-9a-f-]{36}$/i.test(qe))deepEv=qe}catch(e){}
 try{const qc=new URLSearchParams(location.search).get("city");if(qc&&CITIES.some(c=>c.id===qc)){S.city=qc;S.posSrc="area";persist()}
   if(location.search)history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
 /* ================= ИНСТАЛИРАНЕ НА ТЕЛЕФОНА (PWA) ================= */
@@ -1473,6 +1475,58 @@ async function grabImage(src){
     const bm=await createImageBitmap(bl),W=1200,sc=Math.min(1,W/bm.width),cv=document.createElement("canvas");
     cv.width=Math.round(bm.width*sc);cv.height=Math.round(bm.height*sc);cv.getContext("2d").drawImage(bm,0,0,cv.width,cv.height);
     return cv.toDataURL("image/jpeg",.85)}catch(e){return null}
+}
+
+/* ================= СПОДЕЛЯНЕ НА СЪБИТИЕ ================= */
+// точна дата (не „утре“), защото споделеното се чете и по-късно
+const absDate=d=>{const w=d.toLocaleDateString("bg-BG",{weekday:"long",day:"numeric",month:"long"});return w.charAt(0).toUpperCase()+w.slice(1)+", "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
+const evUrl=e=>location.origin+"/?e="+e.id;
+const evText=e=>{const d=new Date(e.start);return `${e.title} — ${absDate(d)}${e.venue?", "+e.venue:""}, ${cityName(e.city)}${e.ageL?" · "+e.ageL:""}`};
+function openShare(e){if(!e)return;
+  const u=encodeURIComponent(evUrl(e)),t=encodeURIComponent(evText(e)+"\n"+evUrl(e));
+  const nets=[["viber","Viber",`viber://forward?text=${t}`],["whatsapp","WhatsApp",`https://wa.me/?text=${t}`],["facebook","Facebook",`https://www.facebook.com/sharer/sharer.php?u=${u}`],
+    ["messenger","Messenger",`fb-messenger://share/?link=${u}`],["telegram","Telegram",`https://t.me/share/url?url=${u}&text=${encodeURIComponent(evText(e))}`]];
+  openSheet(`${sheetHead("Сподели събитието",esc(e.title))}
+   <div class="share-grid">
+    ${navigator.share?`<button type="button" class="share-btn main" data-shnet="native" data-sheid="${e.id}">${ui("share")}<span>Сподели…</span><small>Instagram, Viber, Messenger и др.</small></button>`:""}
+    ${nets.map(([k,l,h])=>`<a class="share-btn" href="${h}" target="_blank" rel="noopener" data-net="${k}"><span>${l}</span></a>`).join("")}
+    <button type="button" class="share-btn" data-shnet="copy" data-sheid="${e.id}"><span>Копирай линка</span></button>
+   </div>
+   <div class="box" style="margin:14px 0 0;display:grid;gap:8px"><b>За Instagram Story</b><p class="hint" style="margin:0">Готова картинка със снимката, датата и линка. Споделяш я в Story и добавяш стикер „Link“ към <b>${esc(location.host)}</b>.</p>
+    <button type="button" class="btn ghost block" data-shstory="${e.id}">${ui("plus")} Направи картинка за Story</button></div>`);
+}
+async function shareTo(k,e){if(!e)return;const url=evUrl(e);
+  if(k==="native"){try{await navigator.share({title:e.title,text:evText(e),url})}catch(_){}return}
+  if(k==="copy"){try{await navigator.clipboard.writeText(evText(e)+"\n"+url);toast("Линкът е копиран.")}catch(_){toast(url)}}
+}
+// картинка 1080×1920 за Instagram Story
+function loadImg(src){return new Promise(r=>{if(!src)return r(null);const i=new Image();i.crossOrigin="anonymous";i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})}
+function wrapText(x,t,maxW){const w=t.split(/\s+/),out=[];let line="";w.forEach(s=>{const tr=line?line+" "+s:s;if(x.measureText(tr).width>maxW&&line){out.push(line);line=s}else line=tr});if(line)out.push(line);return out}
+async function shareStory(e){if(!e)return;busy(true);
+  try{
+    const W=1080,H=1920,cv=document.createElement("canvas");cv.width=W;cv.height=H;const x=cv.getContext("2d");
+    x.fillStyle="#0E5551";x.fillRect(0,0,W,H);
+    const img=await loadImg(e.photo);
+    if(img){const r=Math.max(W/img.width,1100/img.height),iw=img.width*r,ih=img.height*r;x.save();x.beginPath();x.rect(0,0,W,1100);x.clip();x.drawImage(img,(W-iw)/2,(1100-ih)/2,iw,ih);x.restore();
+      const g=x.createLinearGradient(0,800,0,1100);g.addColorStop(0,"rgba(14,85,81,0)");g.addColorStop(1,"rgba(14,85,81,1)");x.fillStyle=g;x.fillRect(0,800,W,300)}
+    else{x.fillStyle="#F39223";x.fillRect(0,0,W,1100);
+      // без снимка: голямата иконка на Joyli (календар с усмивка)
+      x.save();x.translate(W/2-300,250);x.scale(600/512,600/512);x.strokeStyle="#FFFFFF";x.lineWidth=26;x.lineCap="round";
+      x.beginPath();x.roundRect(132,150,248,232,52);x.stroke();x.beginPath();x.moveTo(132,216);x.lineTo(380,216);x.stroke();
+      x.beginPath();x.moveTo(196,108);x.lineTo(196,168);x.moveTo(316,108);x.lineTo(316,168);x.stroke();
+      x.stroke(new Path2D("M198 284 Q256 344 314 284"));x.fillStyle="#0E5551";x.beginPath();x.arc(392,122,40,0,7);x.fill();x.lineWidth=14;x.stroke();x.restore()}
+    try{await document.fonts.load("800 80px Montserrat");await document.fonts.load("600 40px Manrope")}catch(_){}
+    let y=1200;x.fillStyle="#FFFFFF";
+    if(e.ageL){x.font="700 40px Manrope, sans-serif";const tw=x.measureText(e.ageL).width+48;x.fillStyle="#F39223";x.beginPath();x.roundRect(72,y-52,tw,70,35);x.fill();x.fillStyle="#FFFFFF";x.fillText(e.ageL,96,y-4);y+=70}
+    x.font="800 84px Montserrat, sans-serif";const lines=wrapText(x,e.title,W-144).slice(0,4);lines.forEach(l=>{y+=96;x.fillText(l,72,y)});
+    const d=new Date(e.start);x.font="600 44px Manrope, sans-serif";x.fillStyle="#DCEBE9";y+=80;x.fillText(absDate(d)+(e.repeat?" · всяка седмица":""),72,y);
+    y+=62;x.fillText([e.venue,cityName(e.city)].filter(Boolean).join(", ").slice(0,44),72,y);
+    x.fillStyle="#FFFFFF";x.font="800 64px Montserrat, sans-serif";x.fillText("Joyli",72,H-150);
+    x.font="600 40px Manrope, sans-serif";x.fillStyle="#F6B26B";x.fillText(location.host,72,H-92);
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));const file=new File([blob],"joyli-sabitie.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:e.title}).catch(()=>{})}
+    else{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="joyli-sabitie.png";document.body.appendChild(a);a.click();a.remove();toast("Картинката е свалена.")}
+  }catch(err){console.error(err);toast("Не успяхме да направим картинката.")}finally{busy(false)}
 }
 
 /* ================= РЕНДЕР ================= */
@@ -1837,8 +1891,9 @@ document.addEventListener("click",ev=>{
   if(ds.review){if(need("review",ds.review,"Влез, за да оставиш оценка."))return;if(!rateVal){toast("Избери от 1 до 5 звезди");return}
     const eid=ds.review,stars=rateVal,txt=$("#rText").value.trim()||null,[x,y]=evXY(ev);
     act(async()=>{await q(sb.from("reviews").upsert({event_id:eid,user_id:LIVE.me.id,rating:stars,comment:txt}));await LOAD.reviews(eid)},{reload:["me","events"],ok:"Оценката е публикувана"}).then(r=>{if(r&&stars>=4)sparkle(x,y)});return}
-  if(ds.share){const e=findEv(ds.share),d=new Date(e.start),txt=`${e.title} · ${whenShort(d)} · ${e.venue}, ${cityName(e.city)} · ${price(e.price)}`;
-    try{navigator.clipboard.writeText(txt).then(()=>toast("Копирано. Постави го в съобщение."),()=>toast(txt))}catch(_){toast(txt)}return}
+  if(ds.share){openShare(findEv(ds.share));return}
+  if(ds.shnet){shareTo(ds.shnet,findEv(ds.sheid));return}
+  if(ds.shstory){shareStory(findEv(ds.shstory));return}
   // организатор
   if(ds.newev!==undefined){if(need("newEv",null,"Влез като организатор, за да публикуваш."))return;if(S.role!=="org"&&!isAdmin()){toast("Публикуването е за профили на организатори.");return}openEventForm();return}
   if(ds.edit){openEventForm(ds.edit);return}
@@ -1908,7 +1963,9 @@ else LOAD.all().then(()=>{
   const st=LIVE.me&&LIVE.me.status;
   if(st==="rejected"||st==="blocked"){sb.auth.signOut().then(()=>LOAD.me()).then(renderAll);toast(st==="rejected"?"Регистрацията ти е отказана.":"Профилът е блокиран.")}
   renderAll();
-  if(!S.seenWelcome&&!loggedIn())push("welcome");else signInPolicyCheck();
+  const de=deepEv&&findEv(deepEv);deepEv=null;
+  if(de){S.city=de.city;persist();renderTab();if(!S.seenWelcome&&!loggedIn()){S.seenWelcome=1;persist()}openEvent(de.id);signInPolicyCheck()}
+  else if(!S.seenWelcome&&!loggedIn())push("welcome");else signInPolicyCheck();
 }).catch(e=>{console.error(e);document.body.classList.remove("loading");toast(bgErr(e))});
 // обновяване на известията и данните на всеки 60 секунди, докато приложението е отворено
 setInterval(()=>{if(document.hidden||!LIVE.ready)return;Promise.all([LOAD.events(),loggedIn()?LOAD.me():null]).then(()=>{if(!sheetOpen()&&!S.screens.some(s=>["filters","date"].includes(s.name)))renderTab()}).catch(()=>{})},60000);
