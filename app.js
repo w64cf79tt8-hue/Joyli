@@ -1,5 +1,5 @@
 "use strict";
-const JOYLI_BUILD="20261117112736";
+const JOYLI_BUILD="20261119110452";
 (function(){
 /* ================= ДАННИ ================= */
 const CATS=[
@@ -1063,6 +1063,7 @@ const ERR_BG=[
   [/Email not confirmed/i,"Потвърди имейла си от писмото, което ти изпратихме, и опитай пак."],
   [/User already registered|already been registered/i,"Вече има профил с този имейл. Влез от раздел „Вход“."],
   [/Password should be at least/i,"Паролата е твърде кратка."],
+  [/email rate limit|over_email_send_rate_limit|sending.*email/i,"В момента не можем да изпратим писмо за потвърждение — достигнат е лимитът за писма. Опитай пак след около час."],
   [/rate limit|too many/i,"Твърде много опити. Изчакай малко и опитай пак."],
   [/Failed to fetch|NetworkError|network/i,"Няма връзка с интернет. Провери връзката и опитай пак."],
   [/JWT|session/i,"Сесията изтече. Влез отново."],
